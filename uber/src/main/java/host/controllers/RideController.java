@@ -6,6 +6,7 @@ import repositories.RideRepository;
 
 import java.util.List;
 
+@RestController
 public class RideController {
 
     private static final RideRepository repository = new RideRepository();
