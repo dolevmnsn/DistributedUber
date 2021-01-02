@@ -1,11 +1,13 @@
 package entities;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
+
 import java.awt.*;
 import java.util.*;
 import java.util.List;
 
-public class Ride {
-    private static class User {
+public class Drive {
+    public static class User {
         private String firstName;
         private String lastName;
         private String phoneNumber;
@@ -67,12 +69,15 @@ public class Ride {
     private User driver;
     private City startingPoint;
     private City endingPoint;
+
+    @JsonFormat(pattern="dd/MM/yyyy")
     private Date departureDate;
+
     private int vacancies;
     private final List<User> passengers;
     private int permittedDeviation;
 
-    public Ride(String firstName, String lastName, String phoneNumber, City startingPoint, City endingPoint, Date departureDate, int vacancies, int permittedDeviation) {
+    public Drive(String firstName, String lastName, String phoneNumber, City startingPoint, City endingPoint, Date departureDate, int vacancies, int permittedDeviation) {
         this.driver = new User(firstName, lastName, phoneNumber);
         this.startingPoint = startingPoint;
         this.endingPoint = endingPoint;

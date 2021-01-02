@@ -1,0 +1,100 @@
+syntax = "proto3";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
+
+option java_multiple_files = true;
+option java_package = "generated";
+option java_outer_classname = "UberProtos";
+
+service PublishDrive {
+    rpc RedirectDrive (Drive) returns (google.protobuf.Empty) {}
+}
+
+service PathPlanning {
+    rpc PlanPath (PathRequest) returns (stream PathResponse) {}
+
+    rpc ApproveDrive (DriveApproval) returns (google.protobuf.Empty) {}
+//    rpc ApproveDrive (stream DriveApproval) returns (Acknowledgment) {}
+}
+
+service SnapshotService {
+    rpc GetSnapshot (google.protobuf.Empty) returns (Snapshot) {}
+}
+
+enum City {
+    A = 0;
+    B = 1;
+    C = 2;
+    D = 3;
+}
+
+message User {
+    string firstName = 1;
+    string lastName = 2;
+    string phoneNumber = 3;
+}
+
+message Drive {
+    User driver = 1;
+    City startingPoint = 2;
+    City endingPoint = 3;
+    google.protobuf.Timestamp departureDate = 4;
+    int32 vacancies = 5;
+    int32 taken = 6;
+    repeated User passengers = 7;
+    int32 permittedDeviation = 8;
+}
+
+message DriveApproval {
+    Drive drive = 1;
+    DriveApprovalStatus status = 2;
+
+    enum DriveApprovalStatus {
+        APPROVE = 0;
+        DECLINE = 1;
+    }
+}
+
+message Path {
+    PathRequest req = 1;
+    Status status = 3;
+    repeated Drive drives = 2;
+
+    enum Status {
+        SATISFIED = 0;
+        DECLINED = 1;
+        PENDING = 2;
+    }
+}
+
+message PathRequest {
+    User passenger = 1;
+    repeated City cities= 2;
+    google.protobuf.Timestamp departureDate = 3;
+}
+
+message PathResponse {
+    Drive drive = 1;
+    repeated Segment segments = 2;
+
+    message Segment {
+        City start = 1;
+        City end = 2;
+    }
+}
+
+message Snapshot {
+    repeated Drive drives = 1;
+    repeated Path paths = 2;
+}
+
+//enum Acknowledgment {
+//    ACK = 0;
+//    NACK = 1;
+//}
+
+
+
+
+
