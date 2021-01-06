@@ -10,22 +10,22 @@ import java.util.List;
 import java.util.Map;
 
 public class Path {
-    private static long counter = 0;
-    private static final Long server_id = Long.valueOf(System.getenv("SERVER_ID"));
-
-    private static Pair<Long, Long> getSerialNumber() {
-        Pair<Long, Long> serialNumber = new Pair<>(server_id, counter);
-        counter++;
-        return serialNumber;
-    }
+//    private static long counter = 0;
+//    private static final Long server_id = Long.valueOf(System.getenv("SERVER_ID"));
+//
+//    private static Pair<Long, Long> getSerialNumber() {
+//        Pair<Long, Long> serialNumber = new Pair<>(server_id, counter);
+//        counter++;
+//        return serialNumber;
+//    }
 
     @Getter
-    private Pair<Long, Long> SN;
+    private final Pair<Long, Long> SN;
 
     @Getter @Setter
     private User passenger;
 
-    private List<City> cities;
+    private final List<City> cities;
 
     @Getter @Setter
     private boolean satisfied = false;
@@ -33,8 +33,8 @@ public class Path {
     @Getter
     private Map<Pair<City, City>, Drive> rides = new HashMap<>();
 
-    public Path(String firstName, String lastName, String phoneNumber, List<City> cities) {
-        this.SN = getSerialNumber();
+    public Path(Pair<Long, Long> SN, String firstName, String lastName, String phoneNumber, List<City> cities) {
+        this.SN = SN;
         this.passenger = new User(firstName, lastName, phoneNumber);
         this.cities = new ArrayList<>(cities);
     }

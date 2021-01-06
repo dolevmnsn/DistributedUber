@@ -9,17 +9,17 @@ import java.util.Date;
 import java.util.List;
 
 public class Drive {
-    private static long counter = 0;
-    private static final Long server_id = Long.valueOf(System.getenv("SERVER_ID"));
-
-    private static Pair<Long, Long> getSerialNumber() {
-        Pair<Long, Long> serialNumber = new Pair<>(server_id, counter);
-        counter++;
-        return serialNumber;
-    }
-
+//    private static long counter = 0;
+//    private static final Long server_id = Long.valueOf(System.getenv("SERVER_ID"));
+//
+//    private static Pair<Long, Long> getSerialNumber() {
+//        Pair<Long, Long> serialNumber = new Pair<>(server_id, counter);
+//        counter++;
+//        return serialNumber;
+//    }
+//
     @Getter
-    private Pair<Long, Long> SN;
+    private final Pair<Long, Long> SN;
 
     @Getter @Setter
     private User driver;
@@ -41,8 +41,8 @@ public class Drive {
     @Getter @Setter
     private int permittedDeviation;
 
-    public Drive(String firstName, String lastName, String phoneNumber, City startingPoint, City endingPoint, Date departureDate, int vacancies, int permittedDeviation) {
-        this.SN = getSerialNumber();
+    public Drive(Pair<Long, Long> SN, String firstName, String lastName, String phoneNumber, City startingPoint, City endingPoint, Date departureDate, int vacancies, int permittedDeviation) {
+        this.SN = SN;
         this.driver = new User(firstName, lastName, phoneNumber);
         this.startingPoint = startingPoint;
         this.endingPoint = endingPoint;

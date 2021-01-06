@@ -10,6 +10,7 @@ import java.io.IOException;
 public class UberApplication {
 
     public static void main(String[] args) throws Exception {
+
         SpringApplication.run(UberApplication.class, args);
         PublishDriveServer publishDriveServer = new PublishDriveServer(Integer.parseInt(System.getenv("PUBLISH_DRIVE_SERVER_PORT")));
         publishDriveServer.start();
@@ -22,4 +23,7 @@ public class UberApplication {
 //        server.blockUntilShutdown();
     }
 
+    public static void initServer() {
+
+    }
 }
