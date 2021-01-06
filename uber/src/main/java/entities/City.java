@@ -1,5 +1,8 @@
 package entities;
 
+import lombok.Getter;
+import lombok.Setter;
+
 import java.awt.*;
 import java.util.Objects;
 
@@ -10,47 +13,22 @@ public enum City {
     B(2, "B", new Point(10,10), generated.City.B),
     C(3, "C", new Point(20,20), generated.City.C);
 
+    @Getter @Setter
     private long id;
+
+    @Getter @Setter
     private String name;
+
+    @Getter @Setter
     private Point location;
+
+    @Getter @Setter
     private generated.City protoType;
 
     City(int id, String name, Point location, generated.City protoType) {
         this.id = id;
         this.name = name;
         this.location = location;
-        this.protoType = protoType;
-    }
-
-    public long getId() {
-        return id;
-    }
-
-    public void setId(long id) {
-        this.id = id;
-    }
-
-    public String getName() {
-        return name;
-    }
-
-    public void setName(String name) {
-        this.name = name;
-    }
-
-    public Point getLocation() {
-        return location;
-    }
-
-    public void setLocation(Point location) {
-        this.location = location;
-    }
-
-    public generated.City getProtoType() {
-        return protoType;
-    }
-
-    public void setProtoType(generated.City protoType) {
         this.protoType = protoType;
     }
 }

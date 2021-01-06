@@ -44,7 +44,7 @@ public class DriveController {
                 .build();
     }
 
-    private User getUser(Drive.User user) {
+    private generated.User getUser(entities.User user) {
         return User.newBuilder().setFirstName(user.getFirstName())
                 .setLastName(user.getLastName())
                 .setPhoneNumber(user.getPhoneNumber()).build();
