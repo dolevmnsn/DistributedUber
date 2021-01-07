@@ -1,6 +1,8 @@
 package host;
 
+import lombok.SneakyThrows;
 import org.apache.zookeeper.*;
+import org.apache.zookeeper.data.Stat;
 import sun.font.TrueTypeFont;
 
 import java.io.IOException;
@@ -15,6 +17,8 @@ public class Omega implements Watcher {
     static int shardSize;
     static int numOfShards;
     public static List<Boolean> members; // all shard members are up at the beginning
+
+    // do we need this?
     public static List<Integer> shardLeaders; // shard_id[1,...,NUM_OF_SHARDS] -> leader_id
     final Object lock = new Object();
 
@@ -22,7 +26,7 @@ public class Omega implements Watcher {
         try {
             zk = new ZooKeeper(zkHost, 3000, this);
             shardId = shard_id;
-            shardId = server_id;
+            serverId = server_id;
             path = String.format("/%d", shard_id);
             isLeader = false;
             shardSize = Integer.parseInt(System.getenv("SHARD_SIZE"));
@@ -31,7 +35,7 @@ public class Omega implements Watcher {
             members = new ArrayList<Boolean>(Collections.nCopies(shardSize, Boolean.TRUE));
             shardLeaders = new ArrayList<Integer>(Collections.nCopies(numOfShards, -1));
 
-            propose();
+            register();
             electLeader();
 
         } catch (Exception e) {
@@ -42,12 +46,20 @@ public class Omega implements Watcher {
     /*
         Create the shard folder is needed and add a znode representing the server
      */
-    public void propose() throws KeeperException, InterruptedException {
-        if (zk.exists(path, true) == null) {
-            zk.create(path, new byte[] {}, ZooDefs.Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT);
+    public void register() throws KeeperException, InterruptedException {
+        if (zk.exists(path, false) == null) { // watch
+            zk.create(path, new byte[]{}, ZooDefs.Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT);
         }
-        zk.create(path + "/", String.valueOf(serverId).getBytes(), ZooDefs.Ids.OPEN_ACL_UNSAFE,
+        if (zk.exists(path + "/election", false) == null) { // watch
+            zk.create(path + "/election", new byte[]{}, ZooDefs.Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT);
+        }
+        if (zk.exists(path + "/members", false) == null) { // watch
+            zk.create(path + "/members", new byte[]{}, ZooDefs.Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT);
+        }
+        zk.create(path + "/election/", String.valueOf(serverId).getBytes(), ZooDefs.Ids.OPEN_ACL_UNSAFE,
                 CreateMode.EPHEMERAL_SEQUENTIAL);
+
+        zk.create(path + "/members/" + serverId, new byte[]{}, ZooDefs.Ids.OPEN_ACL_UNSAFE, CreateMode.EPHEMERAL);
     }
 
     /*
@@ -57,39 +69,89 @@ public class Omega implements Watcher {
     */
     public void electLeader() throws KeeperException, InterruptedException {
         synchronized (lock) {
-            List<String> children = zk.getChildren(path, true);
+            List<String> children = zk.getChildren(path + "/election", false); // watch
             Collections.sort(children);
             byte[] data = null;
             for (String leader : children) {
-                data = zk.getData(path + "/" + leader, true , null);
+                data = zk.getData(path + "/election/" + leader, new Watcher() {
+                    @Override
+                    public void process(WatchedEvent event) {
+                        try {
+                            electLeader();
+                        }
+                        catch (Exception e){
+                            e.printStackTrace();
+                        }
+                    }
+                }, null);
                 if (data != null) {
                     break;
                 }
             }
             if (data != null) {
-                shardLeaders.add(shardId, Integer.parseInt(new String(data)));
+                int leader = Integer.parseInt(new String(data));
+                shardLeaders.add(shardId, leader);
+
+                // I'm the leader
+                if (leader == serverId){
+                    isLeader = true;
+                    // write the leader id into dedicated folder
+                    Stat s = zk.exists(path + "/election/leader", false); // watch
+                    if (s == null) {
+                        zk.create(path + "/election/leader", data, ZooDefs.Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT);
+                    }
+                    else {
+                        zk.setData(path + "/election/leader", data, s.getVersion());
+                    }
+                }
+                updateMembers();
+            }
+        }
+    }
+
+    public void updateMembers() throws KeeperException, InterruptedException {
+        List<String> children = zk.getChildren(path + "/members", new Watcher() {
+            @Override
+            public void process(WatchedEvent event) {
+                if (event.getType() != Event.EventType.None){
+                    try {
+                        updateMembers();
+                    }
+                    catch (Exception e){
+                        e.printStackTrace();
+                    }
+                }
+            }
+        });
+
+        // do this smarter? make sure how we use members list
+        for(int i = 0 ; i < shardSize ; i++){
+            if (members.get(i) && !children.contains(String.valueOf(i+1))){
+                members.set(i, false);
             }
         }
     }
 
     /* get the current leader of the shard with shard_id */
-    public int getLeader(int shard_id) {
-        synchronized (lock) {
-            return shardLeaders.get(shard_id);
-        }
+    public static int getLeader(int shard_id) throws KeeperException, InterruptedException {
+//        synchronized (lock) {
+//            return shardLeaders.get(shard_id);
+//        }
+        // can we assume this exist?
+        byte[] data = zk.getData(String.format("/%s/election/leader", shard_id), false, null);
+        return Integer.parseInt(new String(data));
     }
 
     /* Only for the shard leader to use. Publish an operation to all the shard members */
-    public static void commitOperation(Object o){
+    public static void commitOperation(Object o) {
 
     }
 
     public void process(WatchedEvent watchedEvent) {
         final Event.EventType eventType = watchedEvent.getType();
-        try {
-            electLeader();
-        } catch (Exception e) {
-            e.printStackTrace();
+        if (eventType == Event.EventType.None) {
+            // connection loss
         }
     }
+
 }
