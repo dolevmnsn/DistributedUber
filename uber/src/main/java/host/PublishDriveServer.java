@@ -2,6 +2,8 @@ package host;
 
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
+import protoSerializers.DriveSerializer;
+import protoSerializers.UserSerializer;
 
 import java.io.IOException;
 import java.util.concurrent.TimeUnit;
@@ -22,7 +24,8 @@ public class PublishDriveServer {
      */
     public PublishDriveServer(ServerBuilder<?> serverBuilder, int port) {
         this.port = port;
-        server = serverBuilder.addService(new PublishDriveService())
+        DriveSerializer driveSerializer = new DriveSerializer(new UserSerializer());
+        server = serverBuilder.addService(new GRPCDriveService(new DriveReplicationService(driveSerializer), driveSerializer))
                 .build();
     }
 

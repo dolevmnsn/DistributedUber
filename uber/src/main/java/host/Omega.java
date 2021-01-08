@@ -1,8 +1,12 @@
 package host;
 
+import entities.Drive;
+import entities.Path;
 import lombok.SneakyThrows;
 import org.apache.zookeeper.*;
 import org.apache.zookeeper.data.Stat;
+import repositories.DriveRepository;
+import repositories.PathRepository;
 import sun.font.TrueTypeFont;
 
 import java.io.IOException;
@@ -77,6 +81,10 @@ public class Omega implements Watcher {
                     @Override
                     public void process(WatchedEvent event) {
                         try {
+//                            Optional<Drive> newestDriveTimestamp = DriveRepository.getInstance().getAll().stream().max(Comparator.comparing(Drive::getLastModified));
+//                            newestDriveTimestamp.orElseGet(() -> new Drive().)
+//                            Long newestPathTimestamp = PathRepository.getInstance().getAll().stream().map(Path::getLastModified).max();
+                            // todo: write to zk max(drive, path)
                             electLeader();
                         }
                         catch (Exception e){

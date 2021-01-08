@@ -8,7 +8,7 @@ option java_package = "generated";
 option java_outer_classname = "UberProtos";
 
 service PublishDrive {
-    rpc RedirectDrive (Drive) returns (google.protobuf.Empty) {}
+    rpc saveDrive (SaveDriveRequest) returns (google.protobuf.Empty) {}
 }
 
 service PathPlanning {
@@ -36,14 +36,20 @@ message User {
 }
 
 message Drive {
-    User driver = 1;
-    City startingPoint = 2;
-    City endingPoint = 3;
-    google.protobuf.Timestamp departureDate = 4;
-    int32 vacancies = 5;
-    int32 taken = 6;
-    repeated User passengers = 7;
-    int32 permittedDeviation = 8;
+    string id = 1;
+    User driver = 2;
+    City startingPoint = 3;
+    City endingPoint = 4;
+    google.protobuf.Timestamp departureDate = 5;
+    int32 vacancies = 6;
+    int32 taken = 7;
+    repeated User passengers = 8;
+    int32 permittedDeviation = 9;
+}
+
+message SaveDriveRequest {
+    bool replication = 1;
+    Drive drive = 2;
 }
 
 message DriveApproval {

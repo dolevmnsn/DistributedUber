@@ -25,6 +25,7 @@ def protocVersion = protobufVersion
 
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-web'
+//    implementation 'org.springframework.boot:spring-context'
     developmentOnly 'org.springframework.boot:spring-boot-devtools'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
 
@@ -36,7 +37,10 @@ dependencies {
     implementation "com.google.protobuf:protobuf-java-util:${protobufVersion}"
     runtimeOnly "io.grpc:grpc-netty-shaded:${grpcVersion}"
 
-    compile 'org.apache.zookeeper:zookeeper:3.4.6'
+    compile ('org.apache.zookeeper:zookeeper:3.4.6') {
+        exclude group: 'org.slf4j'
+        exclude group: 'log4j', module: 'log4j'
+    }
 
     compileOnly 'org.projectlombok:lombok:1.18.16'
     annotationProcessor 'org.projectlombok:lombok:1.18.16'

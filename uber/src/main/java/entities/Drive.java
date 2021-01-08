@@ -4,22 +4,12 @@ import javafx.util.Pair;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 
-public class Drive {
-//    private static long counter = 0;
-//    private static final Long server_id = Long.valueOf(System.getenv("SERVER_ID"));
-//
-//    private static Pair<Long, Long> getSerialNumber() {
-//        Pair<Long, Long> serialNumber = new Pair<>(server_id, counter);
-//        counter++;
-//        return serialNumber;
-//    }
-//
-    @Getter
-    private final Pair<Long, Long> SN;
+public class Drive extends BaseEntity{
 
     @Getter @Setter
     private User driver;
@@ -36,21 +26,13 @@ public class Drive {
     @Getter @Setter
     private int vacancies;
 
-    private final List<User> passengers;
+    @Getter @Setter
+    private Long lastModified;
+
+    private final List<User> passengers = new ArrayList<>(); // todo: fixed size
 
     @Getter @Setter
     private int permittedDeviation;
-
-    public Drive(Pair<Long, Long> SN, String firstName, String lastName, String phoneNumber, City startingPoint, City endingPoint, Date departureDate, int vacancies, int permittedDeviation) {
-        this.SN = SN;
-        this.driver = new User(firstName, lastName, phoneNumber);
-        this.startingPoint = startingPoint;
-        this.endingPoint = endingPoint;
-        this.departureDate = departureDate;
-        this.vacancies = vacancies;
-        this.passengers = Arrays.asList(new User[vacancies]); // limited size list
-        this.permittedDeviation = permittedDeviation;
-    }
 
     public List<User> getPassengers() {
         return passengers;

@@ -3,18 +3,15 @@ package entities;
 import lombok.Getter;
 import lombok.Setter;
 
-import java.awt.*;
-import java.util.Objects;
+import java.awt.Point;
 
-// TODO: mapping City -> RouteGuideClient (not here...)
+
+// TODO: mapping City -> Shard (not here...)
 
 public enum City {
-    A(1, "A", new Point(0,0), generated.City.A),
-    B(2, "B", new Point(10,10), generated.City.B),
-    C(3, "C", new Point(20,20), generated.City.C);
-
-    @Getter @Setter
-    private long id;
+    A("A", new Point(0,0), generated.City.A),
+    B("B", new Point(10,10), generated.City.B),
+    C("C", new Point(20,20), generated.City.C);
 
     @Getter @Setter
     private String name;
@@ -25,8 +22,7 @@ public enum City {
     @Getter @Setter
     private generated.City protoType;
 
-    City(int id, String name, Point location, generated.City protoType) {
-        this.id = id;
+    City(String name, Point location, generated.City protoType) {
         this.name = name;
         this.location = location;
         this.protoType = protoType;
