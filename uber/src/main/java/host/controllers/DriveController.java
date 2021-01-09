@@ -4,6 +4,7 @@ import entities.Drive;
 import host.CityShardDistributor;
 import host.ConfigurationManager;
 import host.DriveReplicationService;
+import host.ReplicaManager;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
@@ -22,12 +23,14 @@ public class DriveController {
 
     private DriveReplicationService driveReplicationService;
     private DriveRepository repository;
+    private ReplicaManager replicaManager;
 
     @PostConstruct
     public void initialize() {
         UserSerializer userSerializer = new UserSerializer();
         driveReplicationService = new DriveReplicationService(new DriveSerializer(userSerializer));
         this.repository = DriveRepository.getInstance();
+        this.replicaManager = ReplicaManager.getInstance();
     }
 
     @PostMapping("/drives")
@@ -37,13 +40,13 @@ public class DriveController {
         newDrive.setLastModified(Instant.now().toEpochMilli());
 
         Integer shardId = CityShardDistributor.getShardIdByCity(newDrive.getStartingPoint());
-        int leader = 1; // todo: get real leader
-//        int leader = 0; // todo: not 0
-//        try {
-//            leader = Omega.getLeader(shardId);
-//        } catch (KeeperException | InterruptedException e) {
-//            e.printStackTrace();
-//        }
+        //int leader = 1; // todo: get real
+        int leader = -1;
+        try {
+            leader = replicaManager.getLeader(shardId);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
 
         if (leader == ConfigurationManager.SERVER_ID) {
             repository.save(newDrive);

@@ -22,7 +22,8 @@ public class DriveReplicationService {
     }
 
     public void replicateToAllMembers(Drive newDrive) {
-        List<Integer> members = Collections.singletonList(2); // todo: get real members excluding myself
+        //List<Integer> members = Collections.singletonList(2); // todo: get real members excluding myself
+        List<Integer> members = ReplicaManager.getInstance().getShardMembers();
         members.forEach(serverId -> sendDrive(newDrive, serverId, true));
     }
 

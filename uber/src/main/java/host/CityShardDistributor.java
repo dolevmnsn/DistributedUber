@@ -6,7 +6,7 @@ import java.util.Arrays;
 
 public class CityShardDistributor {
     public static int getShardIdByCity(City city) {
-        return Arrays.asList(City.values()).indexOf(city) % ConfigurationManager.NUM_OF_SHARDS;
+        return (Arrays.asList(City.values()).indexOf(city) % ConfigurationManager.NUM_OF_SHARDS) + 1;
     }
 
 //    private static Map<City, Integer> CITY_TO_SHARD_ID = IntStream
