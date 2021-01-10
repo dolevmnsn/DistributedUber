@@ -7,26 +7,37 @@ option java_multiple_files = true;
 option java_package = "generated";
 option java_outer_classname = "UberProtos";
 
-service PublishDrive {
+service Uber {
     rpc saveDrive (SaveDriveRequest) returns (google.protobuf.Empty) {}
-}
-
-service PathPlanning {
-    rpc PlanPath (PathRequest) returns (stream PathResponse) {}
-
-    rpc ApproveDrive (DriveApproval) returns (google.protobuf.Empty) {}
-//    rpc ApproveDrive (stream DriveApproval) returns (Acknowledgment) {}
-}
-
-service SnapshotService {
+    rpc savePath (SavePathRequest) returns (google.protobuf.Empty) {}
     rpc GetSnapshot (google.protobuf.Empty) returns (Snapshot) {}
 }
+
+//service PathPlanning {
+//    rpc PlanPath (Path) returns (Path) {}
+//
+////    rpc ApproveDrive (DriveApproval) returns (google.protobuf.Empty) {}
+////    rpc ApproveDrive (stream DriveApproval) returns (Acknowledgment) {}
+//}
+
 
 enum City {
     A = 0;
     B = 1;
     C = 2;
     D = 3;
+    E = 4;
+    F = 5;
+    G = 6;
+    H = 7;
+    I = 8;
+    J = 9;
+    K = 10;
+    L = 11;
+    M = 12;
+    N = 13;
+    O = 14;
+    P = 15;
 }
 
 message User {
@@ -40,7 +51,7 @@ message Drive {
     User driver = 2;
     City startingPoint = 3;
     City endingPoint = 4;
-    google.protobuf.Timestamp departureDate = 5;
+    string departureDate = 5;
     int32 vacancies = 6;
     int32 taken = 7;
     repeated User passengers = 8;
@@ -52,48 +63,66 @@ message SaveDriveRequest {
     Drive drive = 2;
 }
 
-message DriveApproval {
-    Drive drive = 1;
-    DriveApprovalStatus status = 2;
-
-    enum DriveApprovalStatus {
-        APPROVE = 0;
-        DECLINE = 1;
-    }
-}
-
 message Path {
-    PathRequest req = 1;
-    Status status = 3;
-    repeated Drive drives = 2;
-
-    enum Status {
-        SATISFIED = 0;
-        DECLINED = 1;
-        PENDING = 2;
-    }
+    string id = 1;
+    User passenger = 2;
+    string departureDate = 3;
+    repeated City cities = 4;
+    bool satisfied = 5;
+    repeated Ride rides = 6;
 }
 
-message PathRequest {
-    User passenger = 1;
-    repeated City cities= 2;
-    google.protobuf.Timestamp departureDate = 3;
+message Ride {
+    City src = 1;
+    City dst = 2;
+    string driveId = 3;
 }
 
-message PathResponse {
-    Drive drive = 1;
-    repeated Segment segments = 2;
-
-    message Segment {
-        City start = 1;
-        City end = 2;
-    }
+message SavePathRequest {
+    bool replication = 1;
+    Path path = 2;
 }
 
 message Snapshot {
     repeated Drive drives = 1;
     repeated Path paths = 2;
 }
+
+//message DriveApproval {
+//    Drive drive = 1;
+//    DriveApprovalStatus status = 2;
+//
+//    enum DriveApprovalStatus {
+//        APPROVE = 0;
+//        DECLINE = 1;
+//    }
+//}
+
+//message Path {
+//    PathRequest req = 1;
+//    Status status = 3;
+//    repeated Drive drives = 2;
+//
+//    enum Status {
+//        SATISFIED = 0;
+//        DECLINED = 1;
+//        PENDING = 2;
+//    }
+//}
+//
+//message PathPlanRequest {
+//    Path path = 1;
+//}
+
+//message PathPlanResponse {
+//    Drive drive = 1;
+//    repeated Segment segments = 2;
+//
+//    message Segment {
+//        City start = 1;
+//        City end = 2;
+//    }
+//}
 
 //enum Acknowledgment {
 //    ACK = 0;

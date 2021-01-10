@@ -1,5 +1,6 @@
 package host;
 
+import GRPCServers.GrpcServer;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
@@ -7,11 +8,13 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 public class UberApplication {
 
     public static void main(String[] args) throws Exception {
+        System.setProperty("spring.devtools.restart.enabled", "false");
+//        ReplicaManager.getInstance(); // side effects
         SpringApplication.run(UberApplication.class, args);
-        PublishDriveServer publishDriveServer = new PublishDriveServer(ConfigurationManager.DRIVE_GRPC_PORT);
-        publishDriveServer.start();
+        GrpcServer grpcServer = new GrpcServer(ConfigurationManager.GRPC_PORT);
+        grpcServer.start();
         System.out.println("Server started");
-        publishDriveServer.blockUntilShutdown();
+        grpcServer.blockUntilShutdown();
 //        ServerBuilder.forPort(Integer.parseInt(System.getenv("PORT")));
 //        RouteGuideServer server = new RouteGuideServer(8980);
 //        server.start();

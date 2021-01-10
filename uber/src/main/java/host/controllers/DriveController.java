@@ -1,9 +1,9 @@
 package host.controllers;
 
+import Services.DriveReplicationService;
 import entities.Drive;
 import host.CityShardDistributor;
 import host.ConfigurationManager;
-import host.DriveReplicationService;
 import host.ReplicaManager;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -13,7 +13,6 @@ import protoSerializers.UserSerializer;
 import repositories.DriveRepository;
 
 import javax.annotation.PostConstruct;
-import java.time.Instant;
 import java.util.UUID;
 import java.util.logging.Logger;
 
@@ -37,10 +36,9 @@ public class DriveController {
     Drive newDrive(@RequestBody Drive newDrive) {
         UUID uuid = UUID.randomUUID();
         newDrive.setId(uuid);
-        newDrive.setLastModified(Instant.now().toEpochMilli());
 
         Integer shardId = CityShardDistributor.getShardIdByCity(newDrive.getStartingPoint());
-        //int leader = 1; // todo: get real
+//        int leader = 1; // todo: get real
         int leader = -1;
         try {
             leader = replicaManager.getLeader(shardId);
@@ -49,6 +47,7 @@ public class DriveController {
         }
 
         if (leader == ConfigurationManager.SERVER_ID) {
+            logger.info(String.format("server-%d is saving new drive (rest)", ConfigurationManager.SERVER_ID));
             repository.save(newDrive);
             driveReplicationService.replicateToAllMembers(newDrive);
         } else {

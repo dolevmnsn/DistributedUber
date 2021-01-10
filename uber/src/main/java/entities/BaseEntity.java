@@ -1,6 +1,5 @@
 package entities;
 
-import javafx.util.Pair;
 import lombok.Getter;
 import lombok.Setter;
 

@@ -24,7 +24,8 @@ public class DriveSerializer implements Serializer<entities.Drive, generated.Dri
                 .setDriver(userSerializer.serialize(drive.getDriver()))
                 .setStartingPoint(drive.getStartingPoint().getProtoType())
                 .setEndingPoint(drive.getEndingPoint().getProtoType())
-                .setDepartureDate(Timestamp.newBuilder().setSeconds(drive.getDepartureDate().getTime()).build())
+//                .setDepartureDate(Timestamp.newBuilder().setSeconds(drive.getDepartureDate().getTime()).build())
+                .setDepartureDate(String.valueOf(drive.getDepartureDate().getTime()))
                 .setVacancies(drive.getVacancies())
                 .setTaken(0)
                 .build();
@@ -32,12 +33,13 @@ public class DriveSerializer implements Serializer<entities.Drive, generated.Dri
 
     @Override
     public entities.Drive deserialize(generated.Drive generatedDrive) {
-        long millis = TimeUnit.MILLISECONDS.convert(generatedDrive.getDepartureDate().getNanos(), TimeUnit.NANOSECONDS);
+//        long millis = TimeUnit.MILLISECONDS.convert(generatedDrive.getDepartureDate().getNanos(), TimeUnit.NANOSECONDS);
 
         Drive drive = new Drive();
         drive.setId(UUID.fromString(generatedDrive.getId()));
         drive.setDriver(userSerializer.deserialize(generatedDrive.getDriver()));
-        drive.setDepartureDate(new Date(millis));
+//        drive.setDepartureDate(new Date(millis));
+        drive.setDepartureDate(new Date(Long.parseLong(generatedDrive.getDepartureDate())));
         drive.setStartingPoint(City.valueOf(generatedDrive.getStartingPoint().toString()));
         drive.setEndingPoint(City.valueOf(generatedDrive.getEndingPoint().toString()));
         drive.setVacancies(generatedDrive.getVacancies());

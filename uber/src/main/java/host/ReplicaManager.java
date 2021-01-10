@@ -1,17 +1,13 @@
 package host;
 
-import entities.Drive;
-import entities.Path;
 import lombok.SneakyThrows;
 import org.apache.zookeeper.*;
 import org.apache.zookeeper.data.ACL;
 import org.apache.zookeeper.data.Stat;
-import repositories.DriveRepository;
-import repositories.PathRepository;
-import sun.font.TrueTypeFont;
 
-import java.io.IOException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.stream.Collectors;
 
 public class ReplicaManager implements Watcher {
@@ -52,15 +48,15 @@ public class ReplicaManager implements Watcher {
     }
 
     // check if the zNode exists, is not create it
-    @SneakyThrows
-    private void checkZNode(String path, boolean watch, byte[] data, List<ACL> acl, CreateMode createMode) {
+//    @SneakyThrows
+    private void checkZNode(String path, boolean watch, byte[] data, List<ACL> acl, CreateMode createMode) throws KeeperException, InterruptedException {
         if (zk.exists(path, watch) == null) {
             zk.create(path, data, acl, createMode);
         }
     }
 
-    @SneakyThrows
-    private void registerServer(){
+//    @SneakyThrows
+    private void registerServer() throws KeeperException, InterruptedException {
         String path = String.format("/%d", shardId);
 
         checkZNode(path, false, new byte[]{}, ZooDefs.Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT);
@@ -119,18 +115,28 @@ public class ReplicaManager implements Watcher {
     }
 
     // get the current leader of the shard with shard_id
-    @SneakyThrows
-    public int getLeader(int shard_id){
+//    @SneakyThrows
+    public int getLeader(int shard_id) throws KeeperException, InterruptedException {
         String path = String.format("/%s/election/leader", shard_id);
         byte[] data = zk.getData(path, false, null);
         return Integer.parseInt(new String(data));
     }
 
-    @SneakyThrows
-    public List<Integer> getShardMembers(){
+//    @SneakyThrows
+    public List<Integer> getShardMembers() throws KeeperException, InterruptedException {
         String path = String.format("/%s/members", shardId);
         List<String> children = zk.getChildren(path, false);
         return children.stream().map(Integer::parseInt).filter(c -> c != serverId).collect(Collectors.toList());
+    }
+
+//    @SneakyThrows
+    public List<Integer> getShardLeaders() throws KeeperException, InterruptedException {
+        List<Integer> leaders = new ArrayList<>();
+        for (int s = 1; s <= ConfigurationManager.NUM_OF_SHARDS; s++) {
+            leaders.add(getLeader(s));
+        }
+
+        return leaders;
     }
 
     public void process(WatchedEvent watchedEvent) {

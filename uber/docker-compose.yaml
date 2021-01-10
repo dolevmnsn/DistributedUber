@@ -1,0 +1,82 @@
+version: '3.1'
+
+x-common-variables: &common-variables
+  NUM_OF_SHARDS: 1
+  GRPC_PORT: 7070
+
+x-common-in-shard1: &common-in-shard1
+  SHARD_ID: 1
+  ZK_HOST: zoo1
+
+x-common-in-shard2: &common-in-shard2
+  SHARD_ID: 2
+  ZK_HOST: zoo1
+
+x-common-in-shard3: &common-in-shard3
+  SHARD_ID: 3
+  ZK_HOST: zoo2
+
+x-common-in-shard4: &common-in-shard4
+  SHARD_ID: 3
+  ZK_HOST: zoo3
+
+services:
+  zooui:
+    image: tobilg/zookeeper-webui
+    ports:
+      - 9090:9090
+    depends_on:
+      - zoo1
+    environment:
+      HTTP_PORT: 9090
+      ZK_DEFAULT_NODE: zoo1:2181/
+  zoo1:
+    image: zookeeper
+    restart: always
+    hostname: zoo1
+    ports:
+      - 2181:2181
+    environment:
+      ZOO_MY_ID: 1
+      ZOO_SERVERS: server.1=0.0.0.0:2888:3888;2181
+#      ZOO_SERVERS: server.1=0.0.0.0:2888:3888;2181 server.2=zoo2:2888:3888;2181 server.3=zoo3:2888:3888;2181
+
+  zoo2:
+    image: zookeeper
+    restart: always
+    hostname: zoo2
+    ports:
+      - 2182:2181
+    environment:
+      ZOO_MY_ID: 2
+      ZOO_SERVERS: server.1=zoo1:2888:3888;2181 server.2=0.0.0.0:2888:3888;2181 server.3=zoo3:2888:3888;2181
+
+  zoo3:
+    image: zookeeper
+    restart: always
+    hostname: zoo3
+    ports:
+      - 2183:2181
+    environment:
+      ZOO_MY_ID: 3
+      ZOO_SERVERS: server.1=zoo1:2888:3888;2181 server.2=zoo2:2888:3888;2181 server.3=0.0.0.0:2888:3888;2181
+
+  server-1:
+    build: .
+    ports:
+      - 8080:8080 # rest
+      - 7070:7070 # grpc
+    environment:
+      SERVER_ID: 1
+      <<: *common-variables
+      <<: *common-in-shard1
+
+  server-2:
+    build: .
+    ports:
+      - 8080:8080 # rest
+      - 7070:7070 # grpc
+    environment:
+      SERVER_ID: 2
+      <<: *common-variables
+      <<: *common-in-shard1

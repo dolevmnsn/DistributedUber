@@ -1,31 +1,39 @@
-package host;
+package GRPCServers;
 
+import Services.*;
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
 import protoSerializers.DriveSerializer;
+import protoSerializers.PathSerializer;
 import protoSerializers.UserSerializer;
 
 import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 
-public class PublishDriveServer {
-    private static final Logger logger = Logger.getLogger(PublishDriveServer.class.getName());
+public class GrpcServer {
+    private static final Logger logger = Logger.getLogger(GrpcServer.class.getName());
 
     private final int port;
     private final Server server;
 
-    public PublishDriveServer(int port) throws IOException {
+    public GrpcServer(int port) throws IOException {
         this(ServerBuilder.forPort(port), port);
     }
 
     /**
      * Create a RouteGuide server using serverBuilder as a base and features as data.
      */
-    public PublishDriveServer(ServerBuilder<?> serverBuilder, int port) {
+    public GrpcServer(ServerBuilder<?> serverBuilder, int port) {
         this.port = port;
-        DriveSerializer driveSerializer = new DriveSerializer(new UserSerializer());
-        server = serverBuilder.addService(new GRPCDriveService(new DriveReplicationService(driveSerializer), driveSerializer))
+        UserSerializer userSerializer = new UserSerializer();
+        DriveSerializer driveSerializer = new DriveSerializer(userSerializer);
+        DriveReplicationService driveReplicationService = new DriveReplicationService(driveSerializer);
+        PathSerializer pathSerializer = new PathSerializer(userSerializer);
+        PathReplicationService pathReplicationService = new PathReplicationService(pathSerializer);
+        PathPlanningService pathPlanningService = new PathPlanningService(pathReplicationService);
+        SnapshotAggregationService snapshotAggregationService = new SnapshotAggregationService();
+        server = serverBuilder.addService(new GrpcService(driveReplicationService, driveSerializer, pathReplicationService, pathSerializer, pathPlanningService, snapshotAggregationService))
                 .build();
     }
 
@@ -45,7 +53,7 @@ public class PublishDriveServer {
                 // Use stderr here since the logger may have been reset by its JVM shutdown hook.
                 System.err.println("*** shutting down gRPC server since JVM is shutting down");
                 try {
-                    PublishDriveServer.this.stop();
+                    GrpcServer.this.stop();
                 } catch (InterruptedException e) {
                     e.printStackTrace(System.err);
                 }
