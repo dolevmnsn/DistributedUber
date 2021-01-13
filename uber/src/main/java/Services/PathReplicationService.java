@@ -54,17 +54,17 @@ public class PathReplicationService {
         return SavePathRequest.newBuilder().setReplication(replication).setPath(path).build();
     }
 
-    public Path sendPlanRequest(Path path) {
-        try {
-            List<Integer> shardLeaders = replicaManager.getShardLeaders().stream()
-                    .filter(leader -> !leader.equals(ConfigurationManager.SERVER_ID))
-                    .collect(Collectors.toList());
-        } catch (KeeperException | InterruptedException e) {
-            e.printStackTrace();
-        }
-
-        // send grpc messages
-
-        return null;
-    }
+//    public Path sendPlanRequest(Path path) {
+//        try {
+//            List<Integer> shardLeaders = replicaManager.getShardLeaders().stream()
+//                    .filter(leader -> !leader.equals(ConfigurationManager.SERVER_ID))
+//                    .collect(Collectors.toList());
+//        } catch (KeeperException | InterruptedException e) {
+//            e.printStackTrace();
+//        }
+//
+//        // send grpc messages
+//
+//        return null;
+//    }
 }

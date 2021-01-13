@@ -3,17 +3,18 @@ package Services;
 import com.google.protobuf.Empty;
 import entities.Drive;
 import entities.Path;
-import generated.SaveDriveRequest;
-import generated.SavePathRequest;
-import generated.Snapshot;
-import generated.UberGrpc;
+import generated.*;
 import host.ConfigurationManager;
+import host.ReplicaManager;
 import io.grpc.stub.StreamObserver;
 import protoSerializers.DriveSerializer;
 import protoSerializers.PathSerializer;
 import repositories.DriveRepository;
 import repositories.PathRepository;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
@@ -78,6 +79,46 @@ public class GrpcService extends UberGrpc.UberImplBase {
                 .build();
 
         responseObserver.onNext(snapshot);
+        responseObserver.onCompleted();
+    }
+
+    @Override
+    public void getPathOptions(generated.Path path, StreamObserver<generated.PathOptionsResponse> responseObserver) {
+        // todo: consider filtering the list
+        PathOptionsResponse options = PathOptionsResponse.newBuilder().
+                addAllDrives(driveRepository.getAll().stream().map(driveSerializer::serialize).collect(Collectors.toList()))
+                .build();
+
+        responseObserver.onNext(options);
+        responseObserver.onCompleted();
+    }
+
+    @Override
+    public void pathApproval(generated.PathApprovalRequest approvalRequest, StreamObserver<Empty> responseObserver) {
+
+        List<UUID> drives= approvalRequest.getDriveIdList().stream().
+                map(d -> UUID.fromString(d)).collect(Collectors.toList());
+
+        List<UUID> visited = new ArrayList<>();
+        boolean success = true;
+        for (UUID id : drives){
+            if(!driveRepository.getDrive(id).increaseTaken()){
+                for(UUID visitedId : visited){ // undo
+                    driveRepository.getDrive(visitedId).decreaseTaken();
+                }
+                success = false;
+                break;
+            }
+            visited.add(id);
+        }
+
+        ReplicaManager replicaManager = ReplicaManager.getInstance();
+        UUID id = UUID.fromString(approvalRequest.getPathId());
+        int shard = approvalRequest.getShard();
+        byte [] response = success? "COMMIT".getBytes() : "ABORT".getBytes();
+        replicaManager.response2PC(id, shard, response, drives);
+
+        responseObserver.onNext(Empty.newBuilder().build());
         responseObserver.onCompleted();
     }
 }

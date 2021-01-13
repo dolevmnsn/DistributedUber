@@ -1,14 +1,18 @@
 package host;
 
+import com.google.common.collect.Sets;
 import lombok.SneakyThrows;
 import org.apache.zookeeper.*;
 import org.apache.zookeeper.data.ACL;
 import org.apache.zookeeper.data.Stat;
+import repositories.DriveRepository;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
+
+import static org.apache.zookeeper.Watcher.Event.EventType.NodeDeleted;
 
 public class ReplicaManager implements Watcher {
     private static ReplicaManager INSTANCE;
@@ -19,6 +23,7 @@ public class ReplicaManager implements Watcher {
     static int replicaVersion;
     //static Object lastOp;
     final Object lock = new Object();
+    static boolean lastTxnStatus;
     //static int shardSize;
     //static int numOfShards;
     //public static List<Integer> members;
@@ -138,6 +143,108 @@ public class ReplicaManager implements Watcher {
 
         return leaders;
     }
+
+    public boolean get2PCStatus(){
+        return lastTxnStatus;
+    }
+
+    @SneakyThrows
+    public void finish2PC(UUID txnId, byte [] message){
+        String path = String.format("/%d/shared-txn/%s/decision", shardId, txnId);
+        zk.setData(path, message, -1);
+
+    }
+
+    @SneakyThrows
+    public void initiate2PC(UUID id, CountDownLatch finishSignal){
+        String path = String.format("/%d/shared-txn", shardId);
+        checkZNode(path, false, new byte[]{}, ZooDefs.Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT);
+        zk.create(path + "/" + id.toString(), new byte[]{}, ZooDefs.Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT);
+        zk.create(path + "/" + id.toString() + "/decision" , new byte[]{}, ZooDefs.Ids.OPEN_ACL_UNSAFE, CreateMode.EPHEMERAL);
+        zk.getChildren(path + "/" + id.toString(), new TPCWatcher(finishSignal, id.toString()));
+    }
+
+    public class TPCWatcher implements Watcher{
+        Set <String> committed;
+        CountDownLatch finishSignal;
+        String txnId;
+
+        public TPCWatcher(CountDownLatch finishSignal, String id){
+            committed = new HashSet<>();
+            this.finishSignal = finishSignal;
+            txnId = id;
+        }
+
+        @SneakyThrows
+        public void process(WatchedEvent event){
+            String path = String.format("/%d/shared-txn/%s", shardId, txnId);
+            Set<String> children = new HashSet<>(zk.getChildren(path, false));
+            if (!Sets.difference(committed, children).isEmpty()){
+                lastTxnStatus = false;
+                finishSignal.countDown();
+            }
+            for(String c : Sets.difference(children, committed)){
+                byte[] data = zk.getData(path + "/" + c, false, null);
+                String msg = new String(data);
+                if (msg.equals("COMMIT")){
+                    committed.add(new String(data));
+                }
+                else if (msg.equals("ABORT")){
+                    lastTxnStatus = false;
+                    finishSignal.countDown();
+                    return;
+                }
+            }
+            if(committed.size() == ConfigurationManager.NUM_OF_SHARDS - 1){
+                lastTxnStatus = true;
+                finishSignal.countDown();
+            }
+            else{
+                zk.getChildren(path, this);
+            }
+        }
+    }
+
+    @SneakyThrows
+    public void response2PC(UUID id, int senderShardId, byte[] response, List<UUID> drives){
+        String path = String.format("/%d/shared-txn/%s/", senderShardId, id.toString());
+        zk.create(path + shardId , response, ZooDefs.Ids.OPEN_ACL_UNSAFE, CreateMode.EPHEMERAL);
+        String msg = new String(response);
+        if (msg.equals("COMMIT")){
+            zk.exists(path + "decision", new TPCResponseWatcher(drives));
+        }
+    }
+
+    public class TPCResponseWatcher implements Watcher{
+        List <UUID> drives;
+
+        public TPCResponseWatcher(List <UUID> drives){
+            this.drives = drives;
+        }
+
+        @SneakyThrows
+        public void process(WatchedEvent event){
+            if (event.getType() == NodeDeleted){
+                for (UUID drive : drives){
+                    DriveRepository.getInstance().getDrive(drive).decreaseTaken();
+                }
+            }
+            else {
+                byte[] data = zk.getData(event.getPath(), false, null);
+                String msg = new String(data);
+                if (!msg.equals("COMMIT")) {
+                    for (UUID drive : drives) {
+                        DriveRepository.getInstance().getDrive(drive).decreaseTaken();
+                        // update drives
+                    }
+                }
+            }
+        }
+    }
+
+
+
+
 
     public void process(WatchedEvent watchedEvent) {
         final Event.EventType eventType = watchedEvent.getType();

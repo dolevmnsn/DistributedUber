@@ -13,6 +13,7 @@ import lombok.Setter;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
+import protoSerializers.DriveSerializer;
 import protoSerializers.PathSerializer;
 import protoSerializers.UserSerializer;
 import repositories.PathRepository;
@@ -49,8 +50,10 @@ public class PathController {
     @PostConstruct
     public void initialize() {
         UserSerializer userSerializer = new UserSerializer();
-        this.pathPlanningService = new PathPlanningService(pathReplicationService);
-        this.pathReplicationService = new PathReplicationService(new PathSerializer(userSerializer));
+        DriveSerializer driveSerializer = new DriveSerializer(userSerializer);
+        PathSerializer pathSerializer = new PathSerializer(userSerializer);
+        this.pathPlanningService = new PathPlanningService(pathSerializer, driveSerializer);
+        this.pathReplicationService = new PathReplicationService(pathSerializer);
         this.pathRepository = PathRepository.getInstance();
         this.replicaManager = ReplicaManager.getInstance();
     }

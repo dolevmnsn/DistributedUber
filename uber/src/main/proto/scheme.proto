@@ -10,6 +10,8 @@ option java_outer_classname = "UberProtos";
 service Uber {
     rpc saveDrive (SaveDriveRequest) returns (google.protobuf.Empty) {}
     rpc savePath (SavePathRequest) returns (google.protobuf.Empty) {}
+    rpc getPathOptions(Path) returns (PathOptionsResponse) {}
+    rpc pathApproval(PathApprovalRequest) returns (google.protobuf.Empty) {}
     rpc GetSnapshot (google.protobuf.Empty) returns (Snapshot) {}
 }
 
@@ -86,6 +88,16 @@ message SavePathRequest {
 message Snapshot {
     repeated Drive drives = 1;
     repeated Path paths = 2;
+}
+
+message PathOptionsResponse{
+    repeated Drive drives = 1;
+}
+
+message PathApprovalRequest{
+    string path_id = 1;
+    uint32 shard = 2;
+    repeated string drive_id = 3;
 }
 
 //message DriveApproval {

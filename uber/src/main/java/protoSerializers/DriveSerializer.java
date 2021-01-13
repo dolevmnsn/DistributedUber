@@ -27,7 +27,7 @@ public class DriveSerializer implements Serializer<entities.Drive, generated.Dri
 //                .setDepartureDate(Timestamp.newBuilder().setSeconds(drive.getDepartureDate().getTime()).build())
                 .setDepartureDate(String.valueOf(drive.getDepartureDate().getTime()))
                 .setVacancies(drive.getVacancies())
-                .setTaken(0)
+                .setTaken(drive.getTaken())
                 .build();
     }
 
