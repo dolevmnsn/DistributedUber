@@ -59,11 +59,13 @@ public class GrpcService extends UberGrpc.UberImplBase {
     @Override
     public void savePath(SavePathRequest request, StreamObserver<Empty> responseObserver) {
         Path newPath = pathSerializer.deserialize(request.getPath());
-        logger.info(String.format("server-%d is saving new path", ConfigurationManager.SERVER_ID));
-        pathRepository.save(newPath);
 
-        if (!request.getReplication()) { // I'm the leader
+        if (request.getReplication()) {
+            pathRepository.save(newPath);
+            logger.info("saving replicated path (grpc)");
+        } else { // I'm the leader
             Path plannedPath = pathPlanningService.planPath(newPath);
+            pathRepository.save(plannedPath);
             pathReplicationService.replicateToAllMembers(plannedPath);
         }
 
@@ -97,7 +99,7 @@ public class GrpcService extends UberGrpc.UberImplBase {
     public void pathApproval(generated.PathApprovalRequest approvalRequest, StreamObserver<Empty> responseObserver) {
 
         List<UUID> drives= approvalRequest.getDriveIdList().stream().
-                map(d -> UUID.fromString(d)).collect(Collectors.toList());
+                map(UUID::fromString).collect(Collectors.toList());
 
         List<UUID> visited = new ArrayList<>();
         boolean success = true;
@@ -113,10 +115,10 @@ public class GrpcService extends UberGrpc.UberImplBase {
         }
 
         ReplicaManager replicaManager = ReplicaManager.getInstance();
-        UUID id = UUID.fromString(approvalRequest.getPathId());
+        UUID pathId = UUID.fromString(approvalRequest.getPathId());
         int shard = approvalRequest.getShard();
-        byte [] response = success? "COMMIT".getBytes() : "ABORT".getBytes();
-        replicaManager.response2PC(id, shard, response, drives);
+        byte [] response = success ? "COMMIT".getBytes() : "ABORT".getBytes();
+        replicaManager.response2PC(pathId, shard, response, drives);
 
         responseObserver.onNext(Empty.newBuilder().build());
         responseObserver.onCompleted();

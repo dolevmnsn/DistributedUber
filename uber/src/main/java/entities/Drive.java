@@ -25,9 +25,9 @@ public class Drive extends BaseEntity{
     @Getter @Setter
     private Integer vacancies;
 
-    @Getter
+    @Getter @Setter
     private Integer taken = 0;
-//
+
 //    @Getter @Setter
 //    private List<User> passengers = new ArrayList<>(); // todo: fixed size
 

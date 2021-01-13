@@ -1,20 +1,27 @@
 package host;
 
+import Services.DriveReplicationService;
 import com.google.common.collect.Sets;
+import entities.Drive;
 import lombok.SneakyThrows;
 import org.apache.zookeeper.*;
 import org.apache.zookeeper.data.ACL;
 import org.apache.zookeeper.data.Stat;
+import protoSerializers.DriveSerializer;
+import protoSerializers.UserSerializer;
 import repositories.DriveRepository;
 
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
 import static org.apache.zookeeper.Watcher.Event.EventType.NodeDeleted;
 
 public class ReplicaManager implements Watcher {
+    private static final Logger logger = Logger.getLogger(ReplicaManager.class.getName());
+
     private static ReplicaManager INSTANCE;
     static ZooKeeper zk;
     static int shardId;
@@ -27,6 +34,7 @@ public class ReplicaManager implements Watcher {
     //static int shardSize;
     //static int numOfShards;
     //public static List<Integer> members;
+    DriveReplicationService driveReplicationService;
 
 
     private ReplicaManager() {
@@ -36,6 +44,7 @@ public class ReplicaManager implements Watcher {
             serverId = ConfigurationManager.SERVER_ID;
             isLeader = false;
             replicaVersion = 0;
+            driveReplicationService = new DriveReplicationService(new DriveSerializer(new UserSerializer()));
 
             registerServer(); // register server to the shard
             electLeader(); // elect a shard leader
@@ -206,8 +215,8 @@ public class ReplicaManager implements Watcher {
     }
 
     @SneakyThrows
-    public void response2PC(UUID id, int senderShardId, byte[] response, List<UUID> drives){
-        String path = String.format("/%d/shared-txn/%s/", senderShardId, id.toString());
+    public void response2PC(UUID pathId, int senderShardId, byte[] response, List<UUID> drives){
+        String path = String.format("/%d/shared-txn/%s/", senderShardId, pathId.toString());
         zk.create(path + shardId , response, ZooDefs.Ids.OPEN_ACL_UNSAFE, CreateMode.EPHEMERAL);
         String msg = new String(response);
         if (msg.equals("COMMIT")){
@@ -224,18 +233,27 @@ public class ReplicaManager implements Watcher {
 
         @SneakyThrows
         public void process(WatchedEvent event){
+            logger.info("process");
             if (event.getType() == NodeDeleted){
+                logger.info("NodeDeleted");
                 for (UUID drive : drives){
                     DriveRepository.getInstance().getDrive(drive).decreaseTaken();
                 }
             }
             else {
+                logger.info("ABORT OR COMMIT");
                 byte[] data = zk.getData(event.getPath(), false, null);
                 String msg = new String(data);
-                if (!msg.equals("COMMIT")) {
+                if (msg.equals("ABORT")) {
                     for (UUID drive : drives) {
                         DriveRepository.getInstance().getDrive(drive).decreaseTaken();
-                        // update drives
+                    }
+                } else if (msg.equals("COMMIT")) {
+                    logger.info("wrote COMMIT");
+                    for (UUID drive : drives) {
+                        Drive drive1 = DriveRepository.getInstance().getDrive(drive);
+                        logger.info(String.format("updating drive with taken seats: %d", drive1.getTaken()));
+                        driveReplicationService.replicateToAllMembers(drive1);
                     }
                 }
             }

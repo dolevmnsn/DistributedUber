@@ -3,48 +3,47 @@ package Services;
 import entities.City;
 import entities.Drive;
 import entities.Path;
-import generated.PathOptionsResponse;
-import generated.SavePathRequest;
 import generated.UberGrpc;
 import host.ConfigurationManager;
 import host.ReplicaManager;
-import host.controllers.SnapshotController;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
-import javafx.util.Pair;
 import org.apache.zookeeper.KeeperException;
 import protoSerializers.DriveSerializer;
 import protoSerializers.PathSerializer;
 import repositories.DriveRepository;
 
 import java.awt.*;
-import java.util.*;
 import java.util.List;
+import java.util.*;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.locks.ReentrantLock;
+import java.util.logging.Logger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static host.CityShardDistributor.getShardIdByCity;
 
 public class PathPlanningService {
+    private static final Logger logger = Logger.getLogger(PathPlanningService.class.getName());
     private final DriveRepository driveRepository;
     private final PathSerializer pathSerializer;
     private final DriveSerializer driveSerializer;
+    private final DriveReplicationService driveReplicationService;
     private final ReplicaManager replicaManager;
+
     //private final PathReplicationService pathReplicationService;
 
 
-    public PathPlanningService(PathSerializer pathSerializer, DriveSerializer driveSerializer) {
+    public PathPlanningService(PathSerializer pathSerializer, DriveSerializer driveSerializer, DriveReplicationService driveReplicationService) {
         this.driveRepository = DriveRepository.getInstance();
         this.pathSerializer = pathSerializer;
         this.driveSerializer = driveSerializer;
         this.replicaManager = ReplicaManager.getInstance();
+        this.driveReplicationService = driveReplicationService;
         //this.pathReplicationService = pathReplicationService;
     }
 
     public Path planPath(Path path){
-
         // repeat several times in case of a race on the drives
         List<Drive> drives = sendPlanRequest(path);
         drives.addAll(driveRepository.getAll());
@@ -59,7 +58,6 @@ public class PathPlanningService {
         if (path.getRides().containsValue(null)) {
             return path;
         } // the path cannot be satisfied
-
 
         // get drives relevant to shard
         List<UUID> drivesInShard = new ArrayList<>();
@@ -80,6 +78,7 @@ public class PathPlanningService {
                 success = false;
                 break;
             }
+            logger.info("increased taken");
             visited.add(id);
         }
 
@@ -100,6 +99,9 @@ public class PathPlanningService {
             if (replicaManager.get2PCStatus()){ // all the shards committed
                 replicaManager.finish2PC(path.getId(), "COMMIT".getBytes());
                 path.setSatisfied(true);
+                path.getRides().values().forEach(driveId ->
+                        driveReplicationService.replicateToAllMembers(driveRepository.getDrive(driveId))
+                );
             }
             else{
                 replicaManager.finish2PC(path.getId(), "ABORT".getBytes());
@@ -107,10 +109,9 @@ public class PathPlanningService {
                     driveRepository.getDrive(id).decreaseTaken();
                 }
             }
+        } catch (Exception e) {
+            e.printStackTrace();
         }
-            catch (Exception e){
-                e.printStackTrace();
-            }
 
         return path;
     }
@@ -161,7 +162,7 @@ public class PathPlanningService {
         boolean sameDate = drive.getDepartureDate().equals(path.getDepartureDate());
         // TODO: calculate right condition. now only from sec to dst.
 //        boolean isNotPassDeviation = maxDeviation(drive, src_dst) <= drive.getPermittedDeviation();
-//        return isNotSameUser && isNotPassDeviation;
+//        return isNotSameUser && sameDate && isNotPassDeviation;
         return isNotSameUser && sameDate &&
                 drive.getStartingPoint().equals(src_dst.getKey()) && drive.getEndingPoint().equals(src_dst.getValue());
     }
