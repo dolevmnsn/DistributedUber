@@ -8,6 +8,7 @@ import host.ConfigurationManager;
 import host.ReplicaManager;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
+import lombok.SneakyThrows;
 import org.apache.zookeeper.KeeperException;
 import protoSerializers.DriveSerializer;
 import protoSerializers.PathSerializer;
@@ -44,75 +45,91 @@ public class PathPlanningService {
     }
 
     public Path planPath(Path path){
+
         // repeat several times in case of a race on the drives
         List<Drive> drives = sendPlanRequest(path);
-        drives.addAll(driveRepository.getAll());
-        Collections.shuffle(drives);
+        drives.addAll(driveRepository.getAll()); //get rides that have vacant seats
 
+        Map<AbstractMap.SimpleEntry<City, City>, List<UUID>> drivesPerSeg = new LinkedHashMap<>();
+
+        // list of potential drives for every segment
+        for (AbstractMap.SimpleEntry<City, City> src_dst : path.getRides().keySet()) {
+            List<UUID> segDrives = findRidesForSegment(src_dst, path, drives);
+            if (segDrives.isEmpty()){
+                return path; // the path cannot be satisfied
+            }
+            drivesPerSeg.put(src_dst, segDrives);
+        }
+
+        // randomly assign drives to path
+        Random rand = new Random();
+        Path finalPath = path; // due to a weird error
         path.getRides().forEach((src_dst, id) -> {
-            if (id == null) {
-                path.getRides().put(src_dst, findRideForSegment(src_dst, path, drives));
+            if (id == null) { // is this needed?
+                finalPath.getRides().put(src_dst,
+                        drivesPerSeg.get(src_dst).get(rand.nextInt(drivesPerSeg.get(src_dst).size())));
             }
         });
 
         if (path.getRides().containsValue(null)) {
+            logger.info("no drives to satisfy the path");
             return path;
         } // the path cannot be satisfied
 
-        // get drives relevant to shard
-        List<UUID> drivesInShard = new ArrayList<>();
-        path.getRides().forEach((src_dst, id) -> {
-            if (ConfigurationManager.SHARD_ID == getShardIdByCity(src_dst.getKey())){
-                drivesInShard.add(id);
-            }
-        });
+        // get a mapping of the drives in the path by shards
+        List<List<UUID>> drivesPerShard = pathDrivesPerShard(path);
 
-        // reserve the places in the shard
-        List<UUID> visited = new ArrayList<>();
-        boolean success = true;
-        for (UUID id : drivesInShard){
-            if(!driveRepository.getDrive(id).increaseTaken()){
-                for(UUID visitedId : visited){ // undo
-                    driveRepository.getDrive(visitedId).decreaseTaken();
-                }
-                success = false;
-                break;
-            }
-            logger.info("increased taken");
-            visited.add(id);
+        // reserve the drives belonging to this shard
+        if(!driveRepository.reserveDrives(drivesPerShard.get(ConfigurationManager.SHARD_ID - 1))){
+            return path; // the path cannot be satisfied
         }
 
-        if(!success) {
+        // all the drives in the path belongs to this shard, no need for 2pc
+        if (drivesPerShard.get(ConfigurationManager.SHARD_ID - 1).size() == path.getCities().size() - 1){
+            logger.info("inner shard path planning");
+            path.setSatisfied(true);
+            // publish that the drives are taken to shard
+            path.getRides().values().forEach(driveId ->
+                    driveReplicationService.replicateToAllMembers(driveRepository.getDrive(driveId))
+            );
+        }
+        // initiate 2pc transaction
+        else {
+            try {
+                path = TPCTxn(path, drivesPerShard);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+        return path; // what to return?
+    }
+
+    @SneakyThrows
+    public Path TPCTxn(Path path, List<List<UUID>> drivesPerShard){
+        final CountDownLatch connectedSignal = new CountDownLatch(1);
+        // create the zNodes for the transaction
+        replicaManager.initiate2PC(path.getId(), connectedSignal);
+
+        if (!sendPathApprovalRequest(path, drivesPerShard)) {
+            // some leader didn't get the message
+            replicaManager.abort2PC(path.getId());
             return path;
         }
+        // wait for all the processes to write their response
+        connectedSignal.await();
 
-        try {
-            final CountDownLatch connectedSignal = new CountDownLatch(1);
-            replicaManager.initiate2PC(path.getId(), connectedSignal);
-
-            if (!sendPathApprovalRequest(path)){ // some leader didn't get the message
-                replicaManager.finish2PC(path.getId(), "ABORT".getBytes());
-                return path;
-                }
-            connectedSignal.await();
-
-            if (replicaManager.get2PCStatus()){ // all the shards committed
-                replicaManager.finish2PC(path.getId(), "COMMIT".getBytes());
-                path.setSatisfied(true);
-                path.getRides().values().forEach(driveId ->
-                        driveReplicationService.replicateToAllMembers(driveRepository.getDrive(driveId))
-                );
-            }
-            else{
-                replicaManager.finish2PC(path.getId(), "ABORT".getBytes());
-                for (UUID id : drivesInShard){ // rollback
-                    driveRepository.getDrive(id).decreaseTaken();
-                }
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
+        // read the transaction status from zookeeper
+        String decision = replicaManager.get2PCStatus(path.getId());
+        if (decision.equals("COMMIT")) { // all the shards committed
+            path.setSatisfied(true);
+            // publish that the drives are taken to shard
+            drivesPerShard.get(ConfigurationManager.SHARD_ID - 1).forEach(driveId ->
+                    driveReplicationService.replicateToAllMembers(driveRepository.getDrive(driveId))
+            );
+        } else {
+            // release all the reserved drives
+            driveRepository.releaseDrives(drivesPerShard.get(ConfigurationManager.SHARD_ID - 1));
         }
-
         return path;
     }
 
@@ -147,22 +164,32 @@ public class PathPlanningService {
         }
     }
 
-    private UUID findRideForSegment(AbstractMap.SimpleEntry<City, City> src_dst, Path path, List<Drive> drives) {
+    private List<UUID> findRidesForSegment(AbstractMap.SimpleEntry<City, City> src_dst, Path path, List<Drive> drives) {
+        List<UUID> matchingDrives = new ArrayList<>();
         for (Drive drive : drives) {
             if (satisfiesSegment(drive, src_dst, path)) {
-                // todo: update drive taken seats
-                return drive.getId();
+                matchingDrives.add(drive.getId());
             }
         }
-        return null;
+        return matchingDrives;
     }
+
+//    private UUID findRideForSegment(AbstractMap.SimpleEntry<City, City> src_dst, Path path, List<Drive> drives) {
+//        for (Drive drive : drives) {
+//            if (satisfiesSegment(drive, src_dst, path)) {
+//                // todo: update drive taken seats
+//                return drive.getId();
+//            }
+//        }
+//        return null;
+//    }
 
     private boolean satisfiesSegment(Drive drive, AbstractMap.SimpleEntry<City, City> src_dst, Path path) {
         boolean isNotSameUser = !drive.getDriver().equals(path.getPassenger());
         boolean sameDate = drive.getDepartureDate().equals(path.getDepartureDate());
         // TODO: calculate right condition. now only from sec to dst.
 //        boolean isNotPassDeviation = maxDeviation(drive, src_dst) <= drive.getPermittedDeviation();
-//        return isNotSameUser && sameDate && isNotPassDeviation;
+//        return isNotSameUser && isNotPassDeviation;
         return isNotSameUser && sameDate &&
                 drive.getStartingPoint().equals(src_dst.getKey()) && drive.getEndingPoint().equals(src_dst.getValue());
     }
@@ -190,7 +217,7 @@ public class PathPlanningService {
         return (numerator / denominator);
     }
 
-    public boolean sendPathApprovalRequest(Path path) {
+    public List<List<UUID>> pathDrivesPerShard(Path path){
         List<List<UUID>> drivesPerShard = new ArrayList<>();
         IntStream.range(0, ConfigurationManager.NUM_OF_SHARDS).
                 forEach(i -> drivesPerShard.add(new ArrayList<>()));
@@ -198,7 +225,10 @@ public class PathPlanningService {
             List<UUID> l = drivesPerShard.get(getShardIdByCity(src_dst.getKey()) - 1);
             l.add(id);
         });
+        return drivesPerShard;
+    }
 
+    public boolean sendPathApprovalRequest(Path path, List<List<UUID>> drivesPerShard) {
         boolean success = true;
         try {
             for (int shard = 1; shard <= ConfigurationManager.NUM_OF_SHARDS; shard++) {

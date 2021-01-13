@@ -101,18 +101,7 @@ public class GrpcService extends UberGrpc.UberImplBase {
         List<UUID> drives= approvalRequest.getDriveIdList().stream().
                 map(UUID::fromString).collect(Collectors.toList());
 
-        List<UUID> visited = new ArrayList<>();
-        boolean success = true;
-        for (UUID id : drives){
-            if(!driveRepository.getDrive(id).increaseTaken()){
-                for(UUID visitedId : visited){ // undo
-                    driveRepository.getDrive(visitedId).decreaseTaken();
-                }
-                success = false;
-                break;
-            }
-            visited.add(id);
-        }
+        boolean success = driveRepository.reserveDrives(drives);
 
         ReplicaManager replicaManager = ReplicaManager.getInstance();
         UUID pathId = UUID.fromString(approvalRequest.getPathId());

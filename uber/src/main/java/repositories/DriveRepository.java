@@ -12,8 +12,8 @@ public class DriveRepository {
     private final Map<UUID, Drive> fullDrives;
 
     private DriveRepository() {
-        drives = new LinkedHashMap<>();
-        fullDrives = new LinkedHashMap<>();
+        drives = new HashMap<>();
+        fullDrives = new HashMap<>();
     }
 
     public static DriveRepository getInstance() {
@@ -32,6 +32,26 @@ public class DriveRepository {
 
     public Drive getDrive(UUID id){
         return drives.get(id);
+    }
+
+    public boolean reserveDrives(List<UUID> drives){
+        List<UUID> visited = new ArrayList<>();
+        for (UUID id : drives){
+            if(!getDrive(id).increaseTaken()){
+                for(UUID visitedId : visited){ // undo
+                    getDrive(visitedId).decreaseTaken();
+                }
+                return false;
+            }
+            visited.add(id);
+        }
+        return true;
+    }
+
+    public void releaseDrives(List<UUID> drives){
+        for (UUID id : drives){
+            getDrive(id).decreaseTaken();
+        }
     }
 
     public void updateFullDrive(UUID id){
