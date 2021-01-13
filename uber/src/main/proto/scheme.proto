@@ -91,7 +91,18 @@ message Snapshot {
 }
 
 message PathOptionsResponse{
-    repeated Drive drives = 1;
+
+    message PathOption{
+        Segment segment = 1;
+        Drive drive = 2;
+    }
+
+    message Segment{
+        City startingPoint = 1;
+        City endingPoint = 2;
+    }
+
+    repeated PathOption option = 1;
 }
 
 message PathApprovalRequest{

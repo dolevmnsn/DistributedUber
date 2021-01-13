@@ -12,9 +12,7 @@ import protoSerializers.PathSerializer;
 import repositories.DriveRepository;
 import repositories.PathRepository;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
@@ -86,10 +84,27 @@ public class GrpcService extends UberGrpc.UberImplBase {
 
     @Override
     public void getPathOptions(generated.Path path, StreamObserver<generated.PathOptionsResponse> responseObserver) {
-        // todo: consider filtering the list
-        PathOptionsResponse options = PathOptionsResponse.newBuilder().
-                addAllDrives(driveRepository.getAll().stream().map(driveSerializer::serialize).collect(Collectors.toList()))
-                .build();
+        Path path1 = pathSerializer.deserialize(path);
+        Map<AbstractMap.SimpleEntry<entities.City, entities.City>, List<Drive>> pathOptions =
+                driveRepository.getPathOptions(path1);
+
+        PathOptionsResponse.Builder builder = PathOptionsResponse.newBuilder();
+        for (Map.Entry<AbstractMap.SimpleEntry<entities.City, entities.City>, List<Drive>> entry : pathOptions.entrySet())
+            for(Drive drive : entry.getValue()){
+
+                PathOptionsResponse.Segment segment = PathOptionsResponse.Segment.newBuilder()
+                        .setStartingPoint(entry.getKey().getKey().getProtoType())
+                        .setEndingPoint(entry.getKey().getValue().getProtoType())
+                        .build();
+
+                PathOptionsResponse.PathOption option = PathOptionsResponse.PathOption.newBuilder()
+                        .setDrive(driveSerializer.serialize(drive))
+                        .setSegment(segment)
+                        .build();
+
+                builder.addOption(option);
+            }
+        PathOptionsResponse options = builder.build();
 
         responseObserver.onNext(options);
         responseObserver.onCompleted();

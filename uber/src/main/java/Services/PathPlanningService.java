@@ -3,6 +3,7 @@ package Services;
 import entities.City;
 import entities.Drive;
 import entities.Path;
+import generated.PathOptionsResponse;
 import generated.UberGrpc;
 import host.ConfigurationManager;
 import host.ReplicaManager;
@@ -45,29 +46,31 @@ public class PathPlanningService {
     }
 
     public Path planPath(Path path){
+        // todo: repeat several times in case of a race on the drives
 
-        // repeat several times in case of a race on the drives
-        List<Drive> drives = sendPlanRequest(path);
-        drives.addAll(driveRepository.getAll()); //get rides that have vacant seats
+        Map<AbstractMap.SimpleEntry<City, City>, List<Drive>> drives = sendPlanRequest(path);
 
-        Map<AbstractMap.SimpleEntry<City, City>, List<UUID>> drivesPerSeg = new LinkedHashMap<>();
+        // add inner shard drives to path options
+        driveRepository.getPathOptions(path).forEach((src_dst, l) ->
+                drives.get(src_dst).addAll(l));
 
-        // list of potential drives for every segment
-        for (AbstractMap.SimpleEntry<City, City> src_dst : path.getRides().keySet()) {
-            List<UUID> segDrives = findRidesForSegment(src_dst, path, drives);
-            if (segDrives.isEmpty()){
-                return path; // the path cannot be satisfied
+        for(List<Drive> l : drives.values()){
+            if(l.isEmpty()){
+                // the path cannot be satisfied
+                return path;
             }
-            drivesPerSeg.put(src_dst, segDrives);
         }
 
         // randomly assign drives to path
+        // todo: don't pick the same drive twice
         Random rand = new Random();
+        Set<UUID> taken = new HashSet<>();
         Path finalPath = path; // due to a weird error
+
         path.getRides().forEach((src_dst, id) -> {
             if (id == null) { // is this needed?
                 finalPath.getRides().put(src_dst,
-                        drivesPerSeg.get(src_dst).get(rand.nextInt(drivesPerSeg.get(src_dst).size())));
+                        drives.get(src_dst).get(rand.nextInt(drives.get(src_dst).size())).getId());
             }
         });
 
@@ -77,10 +80,12 @@ public class PathPlanningService {
         } // the path cannot be satisfied
 
         // get a mapping of the drives in the path by shards
+        // todo: the mapping is incorrect (if we ignore pd its fine)
         List<List<UUID>> drivesPerShard = pathDrivesPerShard(path);
 
         // reserve the drives belonging to this shard
         if(!driveRepository.reserveDrives(drivesPerShard.get(ConfigurationManager.SHARD_ID - 1))){
+            logger.info("cannot reserve drives to satisfy the path");
             return path; // the path cannot be satisfied
         }
 
@@ -133,15 +138,20 @@ public class PathPlanningService {
         return path;
     }
 
-    public List<Drive> sendPlanRequest(Path path) {
+    public Map<AbstractMap.SimpleEntry<City, City>, List<Drive>> sendPlanRequest(Path path) {
         try {
             List<Integer> shardLeaders = replicaManager.getShardLeaders().stream()
                     .filter(leader -> !leader.equals(ConfigurationManager.SERVER_ID))
                     .collect(Collectors.toList());
 
-            return shardLeaders.stream().map(l -> getPathOptions(path, l)).
-                    flatMap(Collection::stream).
-                    collect(Collectors.toList());
+            Map<AbstractMap.SimpleEntry<City, City>, List<Drive>> pathOptions = new LinkedHashMap<>();
+            path.getRides().keySet().forEach(k -> pathOptions.put(k, new ArrayList<>()));
+
+            for (Integer l : shardLeaders){
+                getPathOptions(path, l).forEach((k,v) ->
+                        pathOptions.get(k).addAll(v));
+            }
+            return pathOptions;
 
         } catch (KeeperException | InterruptedException e) {
             e.printStackTrace();
@@ -150,7 +160,8 @@ public class PathPlanningService {
         return null;
     }
 
-    public List<Drive> getPathOptions(Path newPath, int serverId) {
+
+    public Map<AbstractMap.SimpleEntry<City, City>, List<Drive>> getPathOptions(Path newPath, int serverId) {
         int port = 7070 + serverId; // todo: delete
         ManagedChannel channel = ManagedChannelBuilder.forAddress("localhost", port).usePlaintext().build();
 //        ManagedChannel channel = ManagedChannelBuilder.forAddress(String.format("server-%d", serverId), ConfigurationManager.GRPC_PORT).usePlaintext().build();
@@ -158,65 +169,30 @@ public class PathPlanningService {
         try {
             UberGrpc.UberBlockingStub stub = UberGrpc.newBlockingStub(channel);
             generated.PathOptionsResponse response = stub.getPathOptions(pathSerializer.serialize(newPath));
-            return response.getDrivesList().stream().map(driveSerializer::deserialize).collect(Collectors.toList());
+
+            Map<AbstractMap.SimpleEntry<City, City>, List<Drive>> pathOptions = new HashMap<>();
+
+            for(PathOptionsResponse.PathOption option :  response.getOptionList()){
+                City src = City.valueOf(option.getSegment().getStartingPoint().toString());
+                City dst = City.valueOf(option.getSegment().getEndingPoint().toString());
+                AbstractMap.SimpleEntry<City, City> key = new AbstractMap.SimpleEntry<>(src, dst);
+                if(pathOptions.containsKey(key)){
+                    pathOptions.get(key).add(driveSerializer.deserialize(option.getDrive()));
+                }
+                else{
+                    List<Drive> drives = new ArrayList<>();
+                    drives.add(driveSerializer.deserialize(option.getDrive()));
+                    pathOptions.put(key, drives);
+                }
+            }
+            return pathOptions;
+
         } finally {
             channel.shutdown();
         }
     }
 
-    private List<UUID> findRidesForSegment(AbstractMap.SimpleEntry<City, City> src_dst, Path path, List<Drive> drives) {
-        List<UUID> matchingDrives = new ArrayList<>();
-        for (Drive drive : drives) {
-            if (satisfiesSegment(drive, src_dst, path)) {
-                matchingDrives.add(drive.getId());
-            }
-        }
-        return matchingDrives;
-    }
-
-//    private UUID findRideForSegment(AbstractMap.SimpleEntry<City, City> src_dst, Path path, List<Drive> drives) {
-//        for (Drive drive : drives) {
-//            if (satisfiesSegment(drive, src_dst, path)) {
-//                // todo: update drive taken seats
-//                return drive.getId();
-//            }
-//        }
-//        return null;
-//    }
-
-    private boolean satisfiesSegment(Drive drive, AbstractMap.SimpleEntry<City, City> src_dst, Path path) {
-        boolean isNotSameUser = !drive.getDriver().equals(path.getPassenger());
-        boolean sameDate = drive.getDepartureDate().equals(path.getDepartureDate());
-        // TODO: calculate right condition. now only from sec to dst.
-//        boolean isNotPassDeviation = maxDeviation(drive, src_dst) <= drive.getPermittedDeviation();
-//        return isNotSameUser && isNotPassDeviation;
-        return isNotSameUser && sameDate &&
-                drive.getStartingPoint().equals(src_dst.getKey()) && drive.getEndingPoint().equals(src_dst.getValue());
-    }
-
-    private double maxDeviation(Drive drive, AbstractMap.SimpleEntry<City, City> src_dst) {
-        Point driveSrc = drive.getStartingPoint().getLocation();
-        Point driveDst = drive.getEndingPoint().getLocation();
-        Point segmentSrc = src_dst.getKey().getLocation();
-        Point segmentDst = src_dst.getValue().getLocation();
-
-        double deviationToSegSrc = distance(driveSrc, driveDst, segmentSrc);
-        double deviationToSegDst = distance(driveSrc, driveDst, segmentDst);
-
-        return Math.max(deviationToSegSrc, deviationToSegDst);
-    }
-
-    private double distance(Point point1, Point point2, Point point0) {
-        int x2_x1 = point2.x - point1.x;
-        int y1_y0 = point1.y - point0.y;
-        int x1_x0 = point1.x - point0.x;
-        int y2_y1 = point2.y - point1.y;
-
-        int numerator = Math.abs(x2_x1 * y1_y0 - x1_x0 * y2_y1);
-        double denominator = Math.sqrt(Math.pow(x2_x1, 2) + Math.pow(y2_y1, 2));
-        return (numerator / denominator);
-    }
-
+    // todo: incorrect
     public List<List<UUID>> pathDrivesPerShard(Path path){
         List<List<UUID>> drivesPerShard = new ArrayList<>();
         IntStream.range(0, ConfigurationManager.NUM_OF_SHARDS).
