@@ -19,8 +19,10 @@ import repositories.PathRepository;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.logging.Logger;
 
 public class SnapshotAggregationService {
+    private static final Logger logger = Logger.getLogger(SnapshotAggregationService.class.getName());
     private final SnapshotSerializer snapshotSerializer;
     private final ReplicaManager replicaManager;
     private final DriveRepository driveRepository;
@@ -54,10 +56,12 @@ public class SnapshotAggregationService {
         return snapshotList;
     }
 
-    private SnapshotController.Snapshot getSnapshotFromServer(Integer serverId) {
-        int port = 7070 + serverId; // todo: delete
-        ManagedChannel channel = ManagedChannelBuilder.forAddress("localhost", port).usePlaintext().build();
-//        ManagedChannel channel = ManagedChannelBuilder.forAddress(String.format("server-%d", serverId), ConfigurationManager.GRPC_PORT).usePlaintext().build();
+    private SnapshotController.Snapshot getSnapshotFromServer(Integer dstServerId) {
+//        int port = 7070 + serverId;
+//        ManagedChannel channel = ManagedChannelBuilder.forAddress("localhost", port).usePlaintext().build();
+        // local vs docker
+        logger.info(String.format("server-%d is requesting snapshot from server-%d", ConfigurationManager.SERVER_ID, dstServerId));
+        ManagedChannel channel = ManagedChannelBuilder.forAddress(String.format("server-%d", dstServerId), ConfigurationManager.GRPC_PORT).usePlaintext().build();
 
         try {
             UberGrpc.UberBlockingStub stub = UberGrpc.newBlockingStub(channel);

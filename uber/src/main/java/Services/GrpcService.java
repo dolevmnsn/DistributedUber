@@ -55,19 +55,25 @@ public class GrpcService extends UberGrpc.UberImplBase {
     }
 
     @Override
-    public void savePath(SavePathRequest request, StreamObserver<Empty> responseObserver) {
+    public void savePath(SavePathRequest request, io.grpc.stub.StreamObserver<generated.Path> responseObserver) {
         Path newPath = pathSerializer.deserialize(request.getPath());
 
+        Path returnValuePath = newPath;
         if (request.getReplication()) {
+            logger.info("saving a new path as a replication (grpc)");
             pathRepository.save(newPath);
-            logger.info("saving replicated path (grpc)");
         } else { // I'm the leader
+            logger.info("I'm the leader. trying to plan path. (grpc)");
             Path plannedPath = pathPlanningService.planPath(newPath);
-            pathRepository.save(plannedPath);
-            pathReplicationService.replicateToAllMembers(plannedPath);
+            if (plannedPath.isSatisfied()) {
+                logger.info("path was satisfied. saving and sending to the rest of the shard (grpc)");
+                pathRepository.save(plannedPath);
+                pathReplicationService.replicateToAllMembers(plannedPath);
+            }
+            returnValuePath = plannedPath;
         }
 
-        responseObserver.onNext(Empty.newBuilder().build());
+        responseObserver.onNext(pathSerializer.serialize(returnValuePath));
         responseObserver.onCompleted();
     }
 

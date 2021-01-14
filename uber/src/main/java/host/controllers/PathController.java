@@ -61,6 +61,7 @@ public class PathController {
 
     @PostMapping("/paths")
     Path newPath(@RequestBody PathWrapper newPathWrapper) {
+        logger.info("got a path planning request.");
         Path newPath = new Path(newPathWrapper.getPassenger(), newPathWrapper.getDepartureDate(), newPathWrapper.getCities());
         UUID uuid = UUID.randomUUID();
         newPath.setId(uuid);
@@ -75,15 +76,16 @@ public class PathController {
 
         Path plannedPath = null;
         if (leader == ConfigurationManager.SERVER_ID) { // I'm the leader
+            logger.info("I'm the leader. trying to plan path. (controller)");
             plannedPath = pathPlanningService.planPath(newPath);
             if (plannedPath.isSatisfied()) {
+                logger.info("path was satisfied. saving and sending to the rest of the shard (controller)");
                 pathRepository.save(plannedPath);
                 pathReplicationService.replicateToAllMembers(plannedPath);
-                logger.info(String.format("server-%d saved and replicated new path: %s", ConfigurationManager.SERVER_ID, plannedPath.getId().toString()));
             }
-        } else { // send to leader (todo: and expect a response.... (plannedPath))
-          pathReplicationService.sendPath(newPath, leader, false);
-//          plannedPath = pathReplicationService.sendPath(newPath, leader, false);
+        } else { // send to leader
+            logger.info(String.format("I'm not the leader. sending the path to the relevant leader: %d", leader));
+            plannedPath = pathReplicationService.sendPath(newPath, leader, false);
         }
 
         return plannedPath;

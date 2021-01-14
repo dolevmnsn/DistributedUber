@@ -10,6 +10,7 @@ COPY . .
 
 RUN gradle bootJar --no-daemon
 
+ENTRYPOINT ["java", "-jar", "/app/build/libs/DistributedUber-0.0.1-SNAPSHOT.jar"]
 
 
 # todo:

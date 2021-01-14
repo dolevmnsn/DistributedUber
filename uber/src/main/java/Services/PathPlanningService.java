@@ -160,11 +160,12 @@ public class PathPlanningService {
         return null;
     }
 
-
-    public Map<AbstractMap.SimpleEntry<City, City>, List<Drive>> getPathOptions(Path newPath, int serverId) {
-        int port = 7070 + serverId; // todo: delete
-        ManagedChannel channel = ManagedChannelBuilder.forAddress("localhost", port).usePlaintext().build();
-//        ManagedChannel channel = ManagedChannelBuilder.forAddress(String.format("server-%d", serverId), ConfigurationManager.GRPC_PORT).usePlaintext().build();
+    public Map<AbstractMap.SimpleEntry<City, City>, List<Drive>> getPathOptions(Path newPath, int dstServerId) {
+//        int port = 7070 + serverId;
+//        ManagedChannel channel = ManagedChannelBuilder.forAddress("localhost", port).usePlaintext().build();
+        // local vs docker
+        logger.info(String.format("server-%d is requesting path options from server-%d", ConfigurationManager.SERVER_ID, dstServerId));
+        ManagedChannel channel = ManagedChannelBuilder.forAddress(String.format("server-%d", dstServerId), ConfigurationManager.GRPC_PORT).usePlaintext().build();
 
         try {
             UberGrpc.UberBlockingStub stub = UberGrpc.newBlockingStub(channel);
@@ -224,10 +225,12 @@ public class PathPlanningService {
         return success;
     }
 
-    public boolean sendPathApproval(List<UUID> drives, UUID pathID, int serverId) {
-        int port = 7070 + serverId; // todo: delete
-        ManagedChannel channel = ManagedChannelBuilder.forAddress("localhost", port).usePlaintext().build();
-//        ManagedChannel channel = ManagedChannelBuilder.forAddress(String.format("server-%d", serverId), ConfigurationManager.GRPC_PORT).usePlaintext().build();
+    public boolean sendPathApproval(List<UUID> drives, UUID pathID, int dstServerId) {
+//        int port = 7070 + serverId;
+//        ManagedChannel channel = ManagedChannelBuilder.forAddress("localhost", port).usePlaintext().build();
+        // local vs docker
+        logger.info(String.format("server-%d is sending path approval to server-%d", ConfigurationManager.SERVER_ID, dstServerId));
+        ManagedChannel channel = ManagedChannelBuilder.forAddress(String.format("server-%d", dstServerId), ConfigurationManager.GRPC_PORT).usePlaintext().build();
 
         try {
             UberGrpc.UberBlockingStub stub = UberGrpc.newBlockingStub(channel);

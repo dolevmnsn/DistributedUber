@@ -13,22 +13,17 @@ import repositories.PathRepository;
 
 import javax.annotation.PostConstruct;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 
 @RestController
 public class SnapshotController {
-    private ReplicaManager replicaManager;
-    private PathRepository pathRepository;
-    private DriveRepository driveRepository;
     private SnapshotAggregationService snapshotAggregationService;
 
 
     @PostConstruct
     public void initialize() {
-        this.replicaManager = ReplicaManager.getInstance();
-        this.driveRepository = DriveRepository.getInstance();
-        this.pathRepository = PathRepository.getInstance();
         this.snapshotAggregationService = new SnapshotAggregationService();
     }
 
@@ -49,9 +44,17 @@ public class SnapshotController {
     Snapshot getSnapshot() {
         List<Snapshot> snapshotList = new ArrayList<>(snapshotAggregationService.aggregateSnapshot());
 
-        return new Snapshot(snapshotList.stream().map(Snapshot::getDrives).flatMap(List::stream).collect(Collectors.toList()),
-                snapshotList.stream().map(Snapshot::getPaths).flatMap(List::stream).collect(Collectors.toList()));
+        List<Drive> drives = snapshotList.stream()
+                .map(Snapshot::getDrives)
+                .flatMap(List::stream)
+                .sorted(Comparator.comparing(Drive::getId))
+                .collect(Collectors.toList());
+        List<Path> paths = snapshotList.stream()
+                .map(Snapshot::getPaths)
+                .flatMap(List::stream)
+                .sorted(Comparator.comparing(Path::getId))
+                .collect(Collectors.toList());
+
+        return new Snapshot(drives, paths);
     }
-
-
 }

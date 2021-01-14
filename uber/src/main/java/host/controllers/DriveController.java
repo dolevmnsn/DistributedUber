@@ -34,11 +34,11 @@ public class DriveController {
 
     @PostMapping("/drives")
     Drive newDrive(@RequestBody Drive newDrive) {
+        logger.info("got a drive publish request.");
         UUID uuid = UUID.randomUUID();
         newDrive.setId(uuid);
 
-        Integer shardId = CityShardDistributor.getShardIdByCity(newDrive.getStartingPoint());
-//        int leader = 1; // todo: get real
+        int shardId = CityShardDistributor.getShardIdByCity(newDrive.getStartingPoint());
         int leader = -1;
         try {
             leader = replicaManager.getLeader(shardId);
@@ -47,10 +47,11 @@ public class DriveController {
         }
 
         if (leader == ConfigurationManager.SERVER_ID) {
-            logger.info(String.format("server-%d is saving new drive (rest)", ConfigurationManager.SERVER_ID));
+            logger.info("I'm the leader. publishing the drive in my shard.");
             repository.save(newDrive);
             driveReplicationService.replicateToAllMembers(newDrive);
         } else {
+            logger.info(String.format("I'm not the leader, sending the publish request to the relevant leader: %d", leader));
             driveReplicationService.sendDrive(newDrive, leader, false);
         }
 

@@ -38,7 +38,7 @@ public class ReplicaManager implements Watcher {
 
     private ReplicaManager() {
         try {
-            zk = new ZooKeeper(ConfigurationManager.ZK_HOST, 3000, this);
+            zk = new ZooKeeper(ConfigurationManager.ZK_HOST, 10000, this);
             shardId = ConfigurationManager.SHARD_ID;
             serverId = ConfigurationManager.SERVER_ID;
             isLeader = false;

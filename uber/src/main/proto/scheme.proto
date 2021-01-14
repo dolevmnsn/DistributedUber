@@ -9,7 +9,7 @@ option java_outer_classname = "UberProtos";
 
 service Uber {
     rpc saveDrive (SaveDriveRequest) returns (google.protobuf.Empty) {}
-    rpc savePath (SavePathRequest) returns (google.protobuf.Empty) {}
+    rpc savePath (SavePathRequest) returns (Path) {}
     rpc getPathOptions(Path) returns (PathOptionsResponse) {}
     rpc pathApproval(PathApprovalRequest) returns (google.protobuf.Empty) {}
     rpc GetSnapshot (google.protobuf.Empty) returns (Snapshot) {}

@@ -10,12 +10,11 @@ import io.grpc.ManagedChannelBuilder;
 import org.apache.zookeeper.KeeperException;
 import protoSerializers.PathSerializer;
 
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.stream.Collectors;
+import java.util.logging.Logger;
 
 public class PathReplicationService {
+    private static final Logger logger = Logger.getLogger(PathReplicationService.class.getName());
     private final PathSerializer pathSerializer;
     private final ReplicaManager replicaManager;
 
@@ -25,8 +24,6 @@ public class PathReplicationService {
     }
 
     public void replicateToAllMembers(Path newPath) {
-//        List<Integer> members = Collections.singletonList(2); // todo: get real members excluding myself
-//        List<Integer> members = Collections.emptyList();
         List<Integer> members = null;
         try {
             members = replicaManager.getShardMembers();
@@ -36,17 +33,22 @@ public class PathReplicationService {
         }
     }
 
-    public void sendPath(Path newPath, int serverId, boolean replication) {
-        int port = 7070 + serverId; // todo: delete
-        ManagedChannel channel = ManagedChannelBuilder.forAddress("localhost", port).usePlaintext().build();
-//        ManagedChannel channel = ManagedChannelBuilder.forAddress(String.format("server-%d", serverId), ConfigurationManager.GRPC_PORT).usePlaintext().build();
+    public Path sendPath(Path newPath, int dstServerId, boolean replication) {
+//        int port = 7070 + serverId;
+//        ManagedChannel channel = ManagedChannelBuilder.forAddress("localhost", port).usePlaintext().build();
+        // local vs docker
+        logger.info(String.format("server-%d is sending path to server-%d", ConfigurationManager.SERVER_ID, dstServerId));
+        ManagedChannel channel = ManagedChannelBuilder.forAddress(String.format("server-%d", dstServerId), ConfigurationManager.GRPC_PORT).usePlaintext().build();
 
+        generated.Path path;
         try {
             UberGrpc.UberBlockingStub stub = UberGrpc.newBlockingStub(channel);
-            stub.savePath(buildSavePathRequest(newPath, replication));
+            path = stub.savePath(buildSavePathRequest(newPath, replication));
         } finally {
             channel.shutdown();
         }
+
+        return pathSerializer.deserialize(path);
     }
 
     private generated.SavePathRequest buildSavePathRequest(Path newPath, boolean replication) {
