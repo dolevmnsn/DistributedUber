@@ -3,7 +3,7 @@ package host.controllers;
 import Services.SnapshotAggregationService;
 import entities.Drive;
 import entities.Path;
-import host.ReplicaManager;
+import host.RevisionManager;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -56,5 +56,15 @@ public class SnapshotController {
                 .collect(Collectors.toList());
 
         return new Snapshot(drives, paths);
+    }
+
+    @GetMapping("/revision")
+    long getRevision() {
+        return RevisionManager.getInstance().getRevision();
+    }
+
+    @GetMapping("/localMemory")
+    Snapshot getLocalMemory() {
+        return new Snapshot(DriveRepository.getInstance().getAll(), PathRepository.getInstance().getAll());
     }
 }

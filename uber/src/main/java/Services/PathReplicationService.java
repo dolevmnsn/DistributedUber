@@ -5,6 +5,7 @@ import generated.SavePathRequest;
 import generated.UberGrpc;
 import host.ConfigurationManager;
 import host.ReplicaManager;
+import host.RevisionManager;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import org.apache.zookeeper.KeeperException;
@@ -16,18 +17,29 @@ import java.util.logging.Logger;
 public class PathReplicationService {
     private static final Logger logger = Logger.getLogger(PathReplicationService.class.getName());
     private final PathSerializer pathSerializer;
-    private final ReplicaManager replicaManager;
 
     public PathReplicationService(PathSerializer pathSerializer) {
         this.pathSerializer = pathSerializer;
-        this.replicaManager = ReplicaManager.getInstance();
     }
 
     public void replicateToAllMembers(Path newPath) {
         List<Integer> members = null;
         try {
-            members = replicaManager.getShardMembers();
-            members.forEach(serverId -> sendPath(newPath, serverId, true));
+            members = ReplicaManager.getInstance().getShardMembers();
+            // todo: remove this! only for testing!!
+            // ----------------
+            if (newPath.getPassenger().getFirstName().equals("testing_update")) {
+                newPath.getPassenger().setFirstName("testing_update_changed");
+                members.remove(0);
+            }
+            // ----------------
+            synchronized (RevisionManager.getInstance()) {
+                long updatedRevision = RevisionManager.getInstance().updateAndGet();
+                newPath.setRevision(updatedRevision);
+                logger.info(String.format("replicating path in the cluster. revision: %d", updatedRevision));
+                // todo: in sync? to guarantee order in sending
+                members.forEach(serverId -> sendPath(newPath, serverId, true));
+            }
         } catch (KeeperException | InterruptedException e) {
             e.printStackTrace();
         }
@@ -58,7 +70,7 @@ public class PathReplicationService {
 
 //    public Path sendPlanRequest(Path path) {
 //        try {
-//            List<Integer> shardLeaders = replicaManager.getShardLeaders().stream()
+//            List<Integer> shardLeaders = ReplicaManager.getInstance().getShardLeaders().stream()
 //                    .filter(leader -> !leader.equals(ConfigurationManager.SERVER_ID))
 //                    .collect(Collectors.toList());
 //        } catch (KeeperException | InterruptedException e) {

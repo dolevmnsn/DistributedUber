@@ -79,16 +79,16 @@ services:
       SERVER_ID: 2
       <<: *common-variables
       <<: *common-in-shard1
-#
-#  server-3:
-#    image: duber:latest
-#    ports:
-#      - 8083:8080 # rest
-#      - 7073:7070 # grpc
-#    environment:
-#      SERVER_ID: 3
-#      <<: *common-variables
-#      <<: *common-in-shard1
+
+  server-3:
+    image: duber:latest
+    ports:
+      - 8083:8080 # rest
+      - 7073:7070 # grpc
+    environment:
+      SERVER_ID: 3
+      <<: *common-variables
+      <<: *common-in-shard1
 
   server-4:
     image: duber:latest
@@ -109,16 +109,16 @@ services:
       SERVER_ID: 5
       <<: *common-variables
       <<: *common-in-shard2
-#
-#  server-6:
-#    image: duber:latest
-#    ports:
-#      - 8086:8080 # rest
-#      - 7076:7070 # grpc
-#    environment:
-#      SERVER_ID: 6
-#      <<: *common-variables
-#      <<: *common-in-shard2
+
+  server-6:
+    image: duber:latest
+    ports:
+      - 8086:8080 # rest
+      - 7076:7070 # grpc
+    environment:
+      SERVER_ID: 6
+      <<: *common-variables
+      <<: *common-in-shard2
 
 #  server-7:
 #    image: duber:latest

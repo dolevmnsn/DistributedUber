@@ -21,15 +21,11 @@ public class DriveController {
     private final Logger logger = Logger.getLogger(DriveController.class.getName());
 
     private DriveReplicationService driveReplicationService;
-    private DriveRepository repository;
-    private ReplicaManager replicaManager;
 
     @PostConstruct
     public void initialize() {
         UserSerializer userSerializer = new UserSerializer();
         driveReplicationService = new DriveReplicationService(new DriveSerializer(userSerializer));
-        this.repository = DriveRepository.getInstance();
-        this.replicaManager = ReplicaManager.getInstance();
     }
 
     @PostMapping("/drives")
@@ -41,14 +37,14 @@ public class DriveController {
         int shardId = CityShardDistributor.getShardIdByCity(newDrive.getStartingPoint());
         int leader = -1;
         try {
-            leader = replicaManager.getLeader(shardId);
+            leader = ReplicaManager.getInstance().getLeader(shardId);
         } catch (Exception e) {
             e.printStackTrace();
         }
 
         if (leader == ConfigurationManager.SERVER_ID) {
             logger.info("I'm the leader. publishing the drive in my shard.");
-            repository.save(newDrive);
+            DriveRepository.getInstance().save(newDrive);
             driveReplicationService.replicateToAllMembers(newDrive);
         } else {
             logger.info(String.format("I'm not the leader, sending the publish request to the relevant leader: %d", leader));

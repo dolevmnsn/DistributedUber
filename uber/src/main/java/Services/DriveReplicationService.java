@@ -5,6 +5,7 @@ import generated.SaveDriveRequest;
 import generated.UberGrpc;
 import host.ConfigurationManager;
 import host.ReplicaManager;
+import host.RevisionManager;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import org.apache.zookeeper.KeeperException;
@@ -25,7 +26,21 @@ public class DriveReplicationService {
         List<Integer> members = null;
         try {
             members = ReplicaManager.getInstance().getShardMembers();
-            members.forEach(serverId -> sendDrive(newDrive, serverId, true));
+            // todo: remove this! only for testing!!
+            // ----------------
+            if (newDrive.getDriver().getFirstName().equals("testing_update")) {
+                newDrive.getDriver().setFirstName("testing_update_changed");
+
+                members.remove(0);
+            }
+            // ----------------
+            synchronized (RevisionManager.getInstance()) {
+                long updatedRevision = RevisionManager.getInstance().updateAndGet();
+                newDrive.setRevision(updatedRevision);
+                logger.info(String.format("replicating drive in the cluster. revision: %d", updatedRevision));
+                // todo: in sync? to guarantee order in sending
+                members.forEach(serverId -> sendDrive(newDrive, serverId, true));
+            }
         } catch (KeeperException | InterruptedException e) {
             e.printStackTrace();
         }

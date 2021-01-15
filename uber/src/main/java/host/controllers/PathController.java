@@ -44,8 +44,6 @@ public class PathController {
 
     private PathReplicationService pathReplicationService;
     private PathPlanningService pathPlanningService;
-    private PathRepository pathRepository;
-    private ReplicaManager replicaManager;
 
     @PostConstruct
     public void initialize() {
@@ -55,8 +53,6 @@ public class PathController {
         DriveReplicationService driveReplicationService = new DriveReplicationService(driveSerializer);
         this.pathPlanningService = new PathPlanningService(pathSerializer, driveSerializer, driveReplicationService);
         this.pathReplicationService = new PathReplicationService(pathSerializer);
-        this.pathRepository = PathRepository.getInstance();
-        this.replicaManager = ReplicaManager.getInstance();
     }
 
     @PostMapping("/paths")
@@ -69,7 +65,7 @@ public class PathController {
         int shardId = CityShardDistributor.getShardIdByCity(newPath.getCities().get(0));
         int leader = -1;
         try {
-            leader = replicaManager.getLeader(shardId);
+            leader = ReplicaManager.getInstance().getLeader(shardId);
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -80,7 +76,7 @@ public class PathController {
             plannedPath = pathPlanningService.planPath(newPath);
             if (plannedPath.isSatisfied()) {
                 logger.info("path was satisfied. saving and sending to the rest of the shard (controller)");
-                pathRepository.save(plannedPath);
+                PathRepository.getInstance().save(plannedPath);
                 pathReplicationService.replicateToAllMembers(plannedPath);
             }
         } else { // send to leader

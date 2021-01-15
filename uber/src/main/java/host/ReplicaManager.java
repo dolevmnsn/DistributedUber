@@ -1,6 +1,7 @@
 package host;
 
 import Services.DriveReplicationService;
+import Services.UpdatesService;
 import com.google.common.collect.Sets;
 import entities.Drive;
 import lombok.SneakyThrows;
@@ -13,7 +14,6 @@ import repositories.DriveRepository;
 
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.locks.ReentrantLock;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
@@ -28,11 +28,7 @@ public class ReplicaManager implements Watcher {
     static int serverId;
     static boolean isLeader;
     static int replicaVersion;
-    //static Object lastOp;
     final Object lock = new Object();
-    //static int shardSize;
-    //static int numOfShards;
-    //public static List<Integer> members;
     DriveReplicationService driveReplicationService;
 
 
@@ -43,11 +39,6 @@ public class ReplicaManager implements Watcher {
             serverId = ConfigurationManager.SERVER_ID;
             isLeader = false;
             replicaVersion = 0;
-            driveReplicationService = new DriveReplicationService(new DriveSerializer(new UserSerializer()));
-
-            registerServer(); // register server to the shard
-            electLeader(); // elect a shard leader
-
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -56,6 +47,13 @@ public class ReplicaManager implements Watcher {
     public static ReplicaManager getInstance() {
         if(INSTANCE == null) {
             INSTANCE = new ReplicaManager();
+            try {
+                INSTANCE.registerServer(); // register server to the shard
+                INSTANCE.electLeader(); // elect a shard leader
+                INSTANCE.driveReplicationService = new DriveReplicationService(new DriveSerializer(new UserSerializer()));
+            } catch (KeeperException | InterruptedException e) {
+                e.printStackTrace();
+            }
         }
         return INSTANCE;
     }
@@ -97,10 +95,6 @@ public class ReplicaManager implements Watcher {
                     @Override
                     public void process(WatchedEvent event) {
                         try {
-                            // Optional<Drive> newestDriveTimestamp = DriveRepository.getInstance().getAll().stream().max(Comparator.comparing(Drive::getLastModified));
-                            // newestDriveTimestamp.orElseGet(() -> new Drive().)
-                            // Long newestPathTimestamp = PathRepository.getInstance().getAll().stream().map(Path::getLastModified).max();
-                            // todo: write to zk max(drive, path)
                             electLeader();
                         }
                         catch (Exception e){
@@ -120,6 +114,7 @@ public class ReplicaManager implements Watcher {
                         else {
                             zk.setData(path + "/election/leader", data, s.getVersion());
                         }
+                        UpdatesService.getInstance().sendUpdateRequest();
                     }
                     break;
                 }

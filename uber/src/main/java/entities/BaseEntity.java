@@ -8,4 +8,7 @@ import java.util.UUID;
 public abstract class BaseEntity {
     @Getter @Setter
     private UUID id;
+
+    @Getter @Setter
+    long revision;
 }

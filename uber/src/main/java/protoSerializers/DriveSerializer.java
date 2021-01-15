@@ -17,6 +17,7 @@ public class DriveSerializer implements Serializer<entities.Drive, generated.Dri
     public generated.Drive serialize(entities.Drive drive) {
         return generated.Drive.newBuilder()
                 .setId(drive.getId().toString())
+                .setRevision(drive.getRevision())
                 .setDriver(userSerializer.serialize(drive.getDriver()))
                 .setStartingPoint(drive.getStartingPoint().getProtoType())
                 .setEndingPoint(drive.getEndingPoint().getProtoType())
@@ -30,6 +31,7 @@ public class DriveSerializer implements Serializer<entities.Drive, generated.Dri
     public entities.Drive deserialize(generated.Drive generatedDrive) {
         Drive drive = new Drive();
         drive.setId(UUID.fromString(generatedDrive.getId()));
+        drive.setRevision(generatedDrive.getRevision());
         drive.setDriver(userSerializer.deserialize(generatedDrive.getDriver()));
         drive.setDepartureDate(new Date(Long.parseLong(generatedDrive.getDepartureDate())));
         drive.setStartingPoint(City.valueOf(generatedDrive.getStartingPoint().toString()));

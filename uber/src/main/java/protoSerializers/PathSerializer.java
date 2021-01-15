@@ -1,13 +1,10 @@
 package protoSerializers;
 
-import com.google.protobuf.Timestamp;
 import entities.City;
 import entities.Path;
 import generated.Ride;
 
-import java.time.Instant;
 import java.util.*;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 public class PathSerializer implements Serializer<Path, generated.Path>{
@@ -21,8 +18,8 @@ public class PathSerializer implements Serializer<Path, generated.Path>{
     public generated.Path serialize(Path path) {
         return generated.Path.newBuilder()
                 .setId(path.getId().toString())
+                .setRevision(path.getRevision())
                 .setPassenger(userSerializer.serialize(path.getPassenger()))
-//                .setDepartureDate(Timestamp.newBuilder().setSeconds(path.getDepartureDate().getTime()).build())
                 .setDepartureDate(String.valueOf(path.getDepartureDate().getTime()))
                 .addAllCities(path.getCities().stream().map(City::getProtoType).collect(Collectors.toList()))
                 .setSatisfied(path.isSatisfied())
@@ -32,12 +29,10 @@ public class PathSerializer implements Serializer<Path, generated.Path>{
 
     @Override
     public entities.Path deserialize(generated.Path generatedPath) {
-//        long millis = TimeUnit.MILLISECONDS.convert(generatedPath.getDepartureDate().getNanos(), TimeUnit.NANOSECONDS);
-
         Path path = new Path();
         path.setId(UUID.fromString(generatedPath.getId()));
+        path.setRevision(generatedPath.getRevision());
         path.setPassenger(userSerializer.deserialize(generatedPath.getPassenger()));
-//        path.setDepartureDate(new Date(millis));
         path.setDepartureDate(new Date(Long.parseLong(generatedPath.getDepartureDate())));
         path.setSatisfied(generatedPath.getSatisfied());
         path.setCities(generatedPath.getCitiesList().stream().map(city -> City.valueOf(city.toString())).collect(Collectors.toList()));

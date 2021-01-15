@@ -8,6 +8,7 @@ import java.awt.*;
 import java.util.*;
 import java.util.List;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
 
 public class DriveRepository {
     private static final Logger logger = Logger.getLogger(DriveRepository.class.getName());
@@ -115,5 +116,11 @@ public class DriveRepository {
         if (drive != null){
             fullDrives.put(id, drive);
         }
+    }
+
+    public List<Drive> getDrivesSinceRevision(long revision) {
+        return drives.values().stream()
+                .filter(drive -> drive.getRevision() > revision)
+                .collect(Collectors.toList());
     }
 }

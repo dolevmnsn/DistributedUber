@@ -5,6 +5,7 @@ import entities.Path;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class PathRepository {
     private static PathRepository INSTANCE;
@@ -27,4 +28,10 @@ public class PathRepository {
     }
 
     public List<Path> getAll() { return paths; }
+
+    public List<Path> getPathsSinceRevision(long revision) {
+        return paths.stream()
+                .filter(path -> path.getRevision() > revision)
+                .collect(Collectors.toList());
+    }
 }

@@ -32,8 +32,7 @@ public class GrpcServer {
         PathSerializer pathSerializer = new PathSerializer(userSerializer);
         PathReplicationService pathReplicationService = new PathReplicationService(pathSerializer);
         PathPlanningService pathPlanningService = new PathPlanningService(pathSerializer, driveSerializer, driveReplicationService);
-        SnapshotAggregationService snapshotAggregationService = new SnapshotAggregationService();
-        server = serverBuilder.addService(new GrpcService(driveReplicationService, driveSerializer, pathReplicationService, pathSerializer, pathPlanningService, snapshotAggregationService))
+        server = serverBuilder.addService(new GrpcService(driveReplicationService, driveSerializer, pathReplicationService, pathSerializer, pathPlanningService))
                 .build();
     }
 

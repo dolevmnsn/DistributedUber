@@ -9,7 +9,7 @@ public class UberApplication {
 
     public static void main(String[] args) throws Exception {
         System.setProperty("spring.devtools.restart.enabled", "false");
-//        ReplicaManager.getInstance(); // side effects
+//        ReplicaManager.getInstance(); // init
         SpringApplication.run(UberApplication.class, args);
         GrpcServer grpcServer = new GrpcServer(ConfigurationManager.GRPC_PORT);
         grpcServer.start();

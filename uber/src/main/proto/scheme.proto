@@ -12,15 +12,10 @@ service Uber {
     rpc savePath (SavePathRequest) returns (Path) {}
     rpc getPathOptions(Path) returns (PathOptionsResponse) {}
     rpc pathApproval(PathApprovalRequest) returns (google.protobuf.Empty) {}
+    rpc GetState (google.protobuf.Empty) returns (Revision) {}
+    rpc UpdateRequest (GeneralUpdateRequest) returns (google.protobuf.Empty) {}
     rpc GetSnapshot (google.protobuf.Empty) returns (Snapshot) {}
 }
-
-//service PathPlanning {
-//    rpc PlanPath (Path) returns (Path) {}
-//
-////    rpc ApproveDrive (DriveApproval) returns (google.protobuf.Empty) {}
-////    rpc ApproveDrive (stream DriveApproval) returns (Acknowledgment) {}
-//}
 
 
 enum City {
@@ -50,14 +45,15 @@ message User {
 
 message Drive {
     string id = 1;
-    User driver = 2;
-    City startingPoint = 3;
-    City endingPoint = 4;
-    string departureDate = 5;
-    int32 vacancies = 6;
-    int32 taken = 7;
-    repeated User passengers = 8;
-    int32 permittedDeviation = 9;
+    uint64 revision = 2;
+    User driver = 3;
+    City startingPoint = 4;
+    City endingPoint = 5;
+    string departureDate = 6;
+    int32 vacancies = 7;
+    int32 taken = 8;
+    repeated User passengers = 9;
+    int32 permittedDeviation = 10;
 }
 
 message SaveDriveRequest {
@@ -67,11 +63,12 @@ message SaveDriveRequest {
 
 message Path {
     string id = 1;
-    User passenger = 2;
-    string departureDate = 3;
-    repeated City cities = 4;
-    bool satisfied = 5;
-    repeated Ride rides = 6;
+    uint64 revision = 2;
+    User passenger = 3;
+    string departureDate = 4;
+    repeated City cities = 5;
+    bool satisfied = 6;
+    repeated Ride rides = 7;
 }
 
 message Ride {
@@ -111,48 +108,18 @@ message PathApprovalRequest{
     repeated string drive_id = 3;
 }
 
-//message DriveApproval {
-//    Drive drive = 1;
-//    DriveApprovalStatus status = 2;
-//
-//    enum DriveApprovalStatus {
-//        APPROVE = 0;
-//        DECLINE = 1;
-//    }
-//}
+message Revision {
+    uint64 revision = 1;
+}
 
-//message Path {
-//    PathRequest req = 1;
-//    Status status = 3;
-//    repeated Drive drives = 2;
-//
-//    enum Status {
-//        SATISFIED = 0;
-//        DECLINED = 1;
-//        PENDING = 2;
-//    }
-//}
-//
-//message PathPlanRequest {
-//    Path path = 1;
-//}
+message GeneralUpdateRequest {
+    message ServerUpdate {
+        int32 serverId = 1;
+        uint64 revision = 2;
+    }
 
-//message PathPlanResponse {
-//    Drive drive = 1;
-//    repeated Segment segments = 2;
-//
-//    message Segment {
-//        City start = 1;
-//        City end = 2;
-//    }
-//}
-
-//enum Acknowledgment {
-//    ACK = 0;
-//    NACK = 1;
-//}
-
-
+    repeated ServerUpdate serverUpdate = 1;
+}
 
 
 

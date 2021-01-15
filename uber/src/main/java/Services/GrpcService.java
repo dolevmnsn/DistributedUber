@@ -4,8 +4,8 @@ import com.google.protobuf.Empty;
 import entities.Drive;
 import entities.Path;
 import generated.*;
-import host.ConfigurationManager;
 import host.ReplicaManager;
+import host.RevisionManager;
 import io.grpc.stub.StreamObserver;
 import protoSerializers.DriveSerializer;
 import protoSerializers.PathSerializer;
@@ -25,11 +25,11 @@ public class GrpcService extends UberGrpc.UberImplBase {
     private final PathSerializer pathSerializer;
     private final PathRepository pathRepository;
     private final PathPlanningService pathPlanningService;
-    private final SnapshotAggregationService snapshotAggregationService;
+    private final RevisionManager revisionManager;
 
     public GrpcService(DriveReplicationService driveReplicationService, DriveSerializer driveSerializer,
                        PathReplicationService pathReplicationService, PathSerializer pathSerializer,
-                       PathPlanningService pathPlanningService, SnapshotAggregationService snapshotAggregationService) {
+                       PathPlanningService pathPlanningService) {
         this.driveRepository = DriveRepository.getInstance();
         this.driveReplicationService = driveReplicationService;
         this.driveSerializer = driveSerializer;
@@ -37,16 +37,19 @@ public class GrpcService extends UberGrpc.UberImplBase {
         this.pathReplicationService = pathReplicationService;
         this.pathSerializer = pathSerializer;
         this.pathPlanningService = pathPlanningService;
-        this.snapshotAggregationService = snapshotAggregationService;
+        this.revisionManager = RevisionManager.getInstance();
     }
 
     @Override
     public void saveDrive(SaveDriveRequest request, StreamObserver<Empty> responseObserver) {
         Drive newDrive = driveSerializer.deserialize(request.getDrive());
-        logger.info(String.format("server-%d is saving new drive (grpc)", ConfigurationManager.SERVER_ID));
         driveRepository.save(newDrive);
 
-        if (!request.getReplication()) { // I'm the leader
+        if (request.getReplication()) { // not leader
+            long newDriveRevision = newDrive.getRevision();
+            revisionManager.setRevision(newDriveRevision);
+            logger.info(String.format("saved new drive (grpc). revision: %d", newDriveRevision));
+        } else { // I'm the leader
             driveReplicationService.replicateToAllMembers(newDrive);
         }
 
@@ -59,8 +62,10 @@ public class GrpcService extends UberGrpc.UberImplBase {
         Path newPath = pathSerializer.deserialize(request.getPath());
 
         Path returnValuePath = newPath;
-        if (request.getReplication()) {
-            logger.info("saving a new path as a replication (grpc)");
+        if (request.getReplication()) { // not leader
+            long newPathRevision = newPath.getRevision();
+            revisionManager.setRevision(newPathRevision);
+            logger.info(String.format("saved new path (grpc). revision: %d", newPathRevision));
             pathRepository.save(newPath);
         } else { // I'm the leader
             logger.info("I'm the leader. trying to plan path. (grpc)");
@@ -129,6 +134,24 @@ public class GrpcService extends UberGrpc.UberImplBase {
         int shard = approvalRequest.getShard();
         byte [] response = success ? "COMMIT".getBytes() : "ABORT".getBytes();
         replicaManager.response2PC(pathId, shard, response, drives);
+
+        responseObserver.onNext(Empty.newBuilder().build());
+        responseObserver.onCompleted();
+    }
+
+    public void getState(com.google.protobuf.Empty request,
+                         io.grpc.stub.StreamObserver<generated.Revision> responseObserver) {
+        responseObserver.onNext(Revision.newBuilder().setRevision(RevisionManager.getInstance().getRevision()).build());
+        responseObserver.onCompleted();
+    }
+
+    public void updateRequest(generated.GeneralUpdateRequest request,
+                              io.grpc.stub.StreamObserver<com.google.protobuf.Empty> responseObserver) {
+        Map<Integer, Long> serversRevisions = new HashMap<>();
+        request.getServerUpdateList()
+                .forEach(serverUpdate -> serversRevisions.put(serverUpdate.getServerId(), serverUpdate.getRevision()));
+
+        UpdatesService.getInstance().sendUpdateToServers(serversRevisions);
 
         responseObserver.onNext(Empty.newBuilder().build());
         responseObserver.onCompleted();
