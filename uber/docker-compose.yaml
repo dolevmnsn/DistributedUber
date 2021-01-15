@@ -1,7 +1,7 @@
 version: '3.1'
 
 x-common-variables: &common-variables
-  NUM_OF_SHARDS: 2
+  NUM_OF_SHARDS: 3
   GRPC_PORT: 7070
 
 x-common-in-shard1: &common-in-shard1
@@ -120,32 +120,32 @@ services:
       <<: *common-variables
       <<: *common-in-shard2
 
-#  server-7:
-#    image: duber:latest
-#    ports:
-#      - 8087:8080 # rest
-#      - 7077:7070 # grpc
-#    environment:
-#      SERVER_ID: 7
-#      <<: *common-variables
-#      <<: *common-in-shard3
-#
-#  server-8:
-#    image: duber:latest
-#    ports:
-#      - 8088:8080 # rest
-#      - 7078:7070 # grpc
-#    environment:
-#      SERVER_ID: 8
-#      <<: *common-variables
-#      <<: *common-in-shard3
-#
-#  server-9:
-#    image: duber:latest
-#    ports:
-#      - 8089:8080 # rest
-#      - 7079:7070 # grpc
-#    environment:
-#      SERVER_ID: 9
-#      <<: *common-variables
-#      <<: *common-in-shard3
+  server-7:
+    image: duber:latest
+    ports:
+      - 8087:8080 # rest
+      - 7077:7070 # grpc
+    environment:
+      SERVER_ID: 7
+      <<: *common-variables
+      <<: *common-in-shard3
+
+  server-8:
+    image: duber:latest
+    ports:
+      - 8088:8080 # rest
+      - 7078:7070 # grpc
+    environment:
+      SERVER_ID: 8
+      <<: *common-variables
+      <<: *common-in-shard3
+
+  server-9:
+    image: duber:latest
+    ports:
+      - 8089:8080 # rest
+      - 7079:7070 # grpc
+    environment:
+      SERVER_ID: 9
+      <<: *common-variables
+      <<: *common-in-shard3

@@ -44,16 +44,22 @@ public class ReplicaManager implements Watcher {
         }
     }
 
+    @SneakyThrows
     public static ReplicaManager getInstance() {
-        if(INSTANCE == null) {
+        if (INSTANCE == null) {
             INSTANCE = new ReplicaManager();
-            try {
-                INSTANCE.registerServer(); // register server to the shard
-                INSTANCE.electLeader(); // elect a shard leader
-                INSTANCE.driveReplicationService = new DriveReplicationService(new DriveSerializer(new UserSerializer()));
-            } catch (KeeperException | InterruptedException e) {
-                e.printStackTrace();
+            while (true) {
+                try {
+                    INSTANCE.registerServer(); // register server to the shard
+                    INSTANCE.electLeader(); // elect a shard leader
+                    break;
+                } catch (KeeperException | InterruptedException e) {
+                    e.printStackTrace();
+                    logger.info("Failed registering to zookeeper, trying again");
+                    Thread.sleep(1000);
+                }
             }
+            INSTANCE.driveReplicationService = new DriveReplicationService(new DriveSerializer(new UserSerializer()));
         }
         return INSTANCE;
     }
@@ -66,7 +72,7 @@ public class ReplicaManager implements Watcher {
         }
     }
 
-//    @SneakyThrows
+    //    @SneakyThrows
     private void registerServer() throws KeeperException, InterruptedException {
         String path = String.format("/%d", shardId);
 
@@ -96,8 +102,7 @@ public class ReplicaManager implements Watcher {
                     public void process(WatchedEvent event) {
                         try {
                             electLeader();
-                        }
-                        catch (Exception e){
+                        } catch (Exception e) {
                             e.printStackTrace();
                         }
                     }
@@ -110,8 +115,7 @@ public class ReplicaManager implements Watcher {
                         Stat s = zk.exists(path + "/election/leader", false); // watch
                         if (s == null) {
                             zk.create(path + "/election/leader", data, ZooDefs.Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT);
-                        }
-                        else {
+                        } else {
                             zk.setData(path + "/election/leader", data, s.getVersion());
                         }
                         UpdatesService.getInstance().sendUpdateRequest();
@@ -130,14 +134,14 @@ public class ReplicaManager implements Watcher {
         return Integer.parseInt(new String(data));
     }
 
-//    @SneakyThrows
+    //    @SneakyThrows
     public List<Integer> getShardMembers() throws KeeperException, InterruptedException {
         String path = String.format("/%s/members", shardId);
         List<String> children = zk.getChildren(path, false);
         return children.stream().map(Integer::parseInt).filter(c -> c != serverId).collect(Collectors.toList());
     }
 
-//    @SneakyThrows
+    //    @SneakyThrows
     public List<Integer> getShardLeaders() throws KeeperException, InterruptedException {
         List<Integer> leaders = new ArrayList<>();
         for (int s = 1; s <= ConfigurationManager.NUM_OF_SHARDS; s++) {
@@ -148,9 +152,9 @@ public class ReplicaManager implements Watcher {
 
     // get the final status of the transaction
     @SneakyThrows
-    public String get2PCStatus(UUID id){
+    public String get2PCStatus(UUID id) {
         String path = String.format("/%d/shared-txn/%s", shardId, id);
-        byte [] decision = zk.getData(path + "/decision", false, null);
+        byte[] decision = zk.getData(path + "/decision", false, null);
         // set watch inorder to delete the transaction
         //zk.getChildren(path, new TPCDeleteTxn(id.toString()));
         return new String(decision);
@@ -158,7 +162,7 @@ public class ReplicaManager implements Watcher {
 
     // abort the 2pc transaction
     @SneakyThrows
-    public void abort2PC(UUID txnId){
+    public void abort2PC(UUID txnId) {
         String path = String.format("/%d/shared-txn/%s", shardId, txnId);
         zk.setData(path + "decision", "ABORT".getBytes(), -1);
         // set watch inorder to delete the transaction
@@ -167,57 +171,55 @@ public class ReplicaManager implements Watcher {
 
     // create the zk nodes before sending respone from ther shards
     @SneakyThrows
-    public void initiate2PC(UUID id, CountDownLatch finishSignal){
+    public void initiate2PC(UUID id, CountDownLatch finishSignal) {
         String path = String.format("/%d/shared-txn", shardId);
         checkZNode(path, false, new byte[]{}, ZooDefs.Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT);
         zk.create(path + "/" + id.toString(), new byte[]{}, ZooDefs.Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT);
-        zk.create(path + "/" + id.toString() + "/decision" , new byte[]{}, ZooDefs.Ids.OPEN_ACL_UNSAFE, CreateMode.EPHEMERAL);
+        zk.create(path + "/" + id.toString() + "/decision", new byte[]{}, ZooDefs.Ids.OPEN_ACL_UNSAFE, CreateMode.EPHEMERAL);
         zk.getChildren(path + "/" + id.toString(), new TPCWatcher(finishSignal, id.toString()));
     }
 
-    public class TPCWatcher implements Watcher{
-        Set <String> committed;
+    public class TPCWatcher implements Watcher {
+        Set<String> committed;
         CountDownLatch finishSignal;
         String txnId;
 
-        public TPCWatcher(CountDownLatch finishSignal, String id){
+        public TPCWatcher(CountDownLatch finishSignal, String id) {
             committed = new HashSet<>();
             this.finishSignal = finishSignal;
             txnId = id;
         }
 
         @SneakyThrows
-        public void process(WatchedEvent event){
+        public void process(WatchedEvent event) {
             String path = String.format("/%d/shared-txn/%s", shardId, txnId);
             Set<String> children = new HashSet<>(zk.getChildren(path, false));
-            if (!Sets.difference(committed, children).isEmpty()){
+            if (!Sets.difference(committed, children).isEmpty()) {
                 // some process failed before we reached a decision
                 zk.setData(path + "/decision", "ABORT".getBytes(), -1);
                 finishSignal.countDown();
             }
-            for(String c : Sets.difference(children, committed)){
+            for (String c : Sets.difference(children, committed)) {
                 byte[] data = zk.getData(path + "/" + c, false, null);
                 String msg = new String(data);
-                if (msg.equals("COMMIT")){
+                if (msg.equals("COMMIT")) {
                     committed.add(new String(data));
-                }
-                else if (msg.equals("ABORT")){
+                } else if (msg.equals("ABORT")) {
                     zk.setData(path + "/decision", "ABORT".getBytes(), -1);
                     finishSignal.countDown();
                     return;
                 }
             }
-            if(committed.size() == ConfigurationManager.NUM_OF_SHARDS - 1){
+            if (committed.size() == ConfigurationManager.NUM_OF_SHARDS - 1) {
                 zk.setData(path + "/decision", "COMMIT".getBytes(), -1);
                 finishSignal.countDown();
-            }
-            else{
+            } else {
                 zk.getChildren(path, this);
             }
         }
     }
 
-    public class TPCDeleteTxn implements Watcher{
+    public class TPCDeleteTxn implements Watcher {
         String txnId;
 
         public TPCDeleteTxn(String id) {
@@ -229,9 +231,9 @@ public class ReplicaManager implements Watcher {
             String path = String.format("/%d/shared-txn/%s", shardId, txnId);
             List<String> children = zk.getChildren(path, false);
             // only "decision" node left
-            if(children.size() == 1){
-                zk.delete(path + "/decision",-1);
-                zk.delete(path,-1);
+            if (children.size() == 1) {
+                zk.delete(path + "/decision", -1);
+                zk.delete(path, -1);
             }
             // continue waiting
             else {
@@ -241,39 +243,38 @@ public class ReplicaManager implements Watcher {
     }
 
     @SneakyThrows
-    public void response2PC(UUID pathId, int senderShardId, byte[] response, List<UUID> drives){
+    public void response2PC(UUID pathId, int senderShardId, byte[] response, List<UUID> drives) {
         String path = String.format("/%d/shared-txn/%s/", senderShardId, pathId.toString());
-        zk.create(path + shardId , response, ZooDefs.Ids.OPEN_ACL_UNSAFE, CreateMode.EPHEMERAL);
+        zk.create(path + shardId, response, ZooDefs.Ids.OPEN_ACL_UNSAFE, CreateMode.EPHEMERAL);
         String msg = new String(response);
         // wait to see if the transaction is declared committed
-        if (msg.equals("COMMIT")){
+        if (msg.equals("COMMIT")) {
             zk.exists(path + "decision", new TPCResponseWatcher(drives));
         }
     }
 
-    public class TPCResponseWatcher implements Watcher{
-        List <UUID> drives;
+    public class TPCResponseWatcher implements Watcher {
+        List<UUID> drives;
 
-        public TPCResponseWatcher(List <UUID> drives){
+        public TPCResponseWatcher(List<UUID> drives) {
             this.drives = drives;
         }
 
         @SneakyThrows
-        public void process(WatchedEvent event){
+        public void process(WatchedEvent event) {
             logger.info("process");
-            if (event.getType() == NodeDeleted){
+            if (event.getType() == NodeDeleted) {
                 logger.info("NodeDeleted");
                 // the transaction leader failed before declaring commit/abort
                 DriveRepository.getInstance().releaseDrives(drives);
-            }
-            else {
+            } else {
                 logger.info("ABORT OR COMMIT");
                 byte[] data = zk.getData(event.getPath(), false, null);
                 String msg = new String(data);
                 if (msg.equals("ABORT")) {
                     DriveRepository.getInstance().releaseDrives(drives);
                 } else if (msg.equals("COMMIT")) {
-                    logger.info("wrote COMMIT");
+                    logger.info("COMMIT");
                     for (UUID drive : drives) {
                         Drive drive1 = DriveRepository.getInstance().getDrive(drive);
                         logger.info(String.format("updating drive with taken seats: %d", drive1.getTaken()));

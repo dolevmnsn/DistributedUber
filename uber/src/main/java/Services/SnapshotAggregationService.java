@@ -24,12 +24,10 @@ import java.util.logging.Logger;
 public class SnapshotAggregationService {
     private static final Logger logger = Logger.getLogger(SnapshotAggregationService.class.getName());
     private final SnapshotSerializer snapshotSerializer;
-    private final ReplicaManager replicaManager;
     private final DriveRepository driveRepository;
     private final PathRepository pathRepository;
 
     public SnapshotAggregationService() {
-        this.replicaManager = ReplicaManager.getInstance();
         this.driveRepository = DriveRepository.getInstance();
         this.pathRepository = PathRepository.getInstance();
         UserSerializer userSerializer = new UserSerializer();
@@ -39,7 +37,7 @@ public class SnapshotAggregationService {
     public List<SnapshotController.Snapshot> aggregateSnapshot() {
         List<Integer> leaders = null;
         try {
-            leaders = replicaManager.getShardLeaders();
+            leaders = ReplicaManager.getInstance().getShardLeaders();
         } catch (KeeperException | InterruptedException e) {
             e.printStackTrace();
             return Collections.emptyList();
