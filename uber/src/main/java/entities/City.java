@@ -20,8 +20,7 @@ public enum City {
     L("L", new Point(20,20), generated.City.L),
     M("M", new Point(20,20), generated.City.M),
     N("N", new Point(20,20), generated.City.N),
-    O("O", new Point(20,20), generated.City.O),
-    P("P", new Point(20,20), generated.City.P);
+    O("O", new Point(20,20), generated.City.O);
 
     @Getter @Setter
     private String name;

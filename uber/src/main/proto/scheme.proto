@@ -34,7 +34,6 @@ enum City {
     M = 12;
     N = 13;
     O = 14;
-    P = 15;
 }
 
 message User {
