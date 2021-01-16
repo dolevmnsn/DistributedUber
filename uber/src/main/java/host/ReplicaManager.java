@@ -118,10 +118,12 @@ public class ReplicaManager implements Watcher {
                         } else {
                             zk.setData(path + "/election/leader", data, s.getVersion());
                         }
-                        UpdatesService.getInstance().sendUpdateRequest();
                     }
                     break;
                 }
+            }
+            if (isLeader) {
+                UpdatesService.getInstance().sendUpdateRequest();
             }
         }
     }
@@ -308,16 +310,15 @@ public class ReplicaManager implements Watcher {
                     // the transaction leader failed before declaring commit/abort
                     DriveRepository.getInstance().releaseDrives(drives);
                 } else {
-                    logger.info("ABORT OR COMMIT");
                     byte[] data = zk.getData(path + "decision", false, null);
                     String msg = new String(data);
                     if (msg.equals("ABORT")) {
                         DriveRepository.getInstance().releaseDrives(drives);
                     } else if (msg.equals("COMMIT")) {
-                        for (UUID drive : drives) {
-                            Drive drive1 = DriveRepository.getInstance().getDrive(drive);
-                            logger.info(String.format("updating drive with taken seats: %d", drive1.getTaken()));
-                            driveReplicationService.replicateToAllMembers(drive1);
+                        for (UUID driveId : drives) {
+                            Drive drive = DriveRepository.getInstance().getDrive(driveId);
+                            logger.info(String.format("updating drive with taken seats: %d", drive.getTaken()));
+                            driveReplicationService.replicateToAllMembers(drive);
                         }
                     }
                 }

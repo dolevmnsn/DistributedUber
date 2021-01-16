@@ -17,10 +17,12 @@ import protoSerializers.UserSerializer;
 import repositories.DriveRepository;
 import repositories.PathRepository;
 
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
 
 public class UpdatesService {
     private static final Logger logger = Logger.getLogger(UpdatesService.class.getName());
@@ -83,8 +85,12 @@ public class UpdatesService {
 
     public void sendUpdateToServers(Map<Integer, Long> serverRevisions) {
         serverRevisions.forEach((serverId, revision) -> {
-            List<Drive> drives = DriveRepository.getInstance().getDrivesSinceRevision(revision);
-            List<Path> paths = PathRepository.getInstance().getPathsSinceRevision(revision);
+            List<Drive> drives = DriveRepository.getInstance().getDrivesSinceRevision(revision).stream()
+                    .sorted(Comparator.comparing(Drive::getRevision))
+                    .collect(Collectors.toList());
+            List<Path> paths = PathRepository.getInstance().getPathsSinceRevision(revision).stream()
+                    .sorted(Comparator.comparing(Path::getRevision))
+                    .collect(Collectors.toList());
 
             drives.forEach(drive -> driveReplicationService.sendDrive(drive, serverId, true));
             paths.forEach(path -> pathReplicationService.sendPath(path, serverId, true));
