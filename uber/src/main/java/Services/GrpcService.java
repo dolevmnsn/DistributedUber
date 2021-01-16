@@ -123,7 +123,7 @@ public class GrpcService extends UberGrpc.UberImplBase {
 
     @Override
     public void pathApproval(generated.PathApprovalRequest approvalRequest, StreamObserver<Empty> responseObserver) {
-
+        logger.info("got path approval request");
         List<UUID> drives= approvalRequest.getDriveIdList().stream().
                 map(UUID::fromString).collect(Collectors.toList());
 
@@ -133,6 +133,7 @@ public class GrpcService extends UberGrpc.UberImplBase {
         UUID pathId = UUID.fromString(approvalRequest.getPathId());
         int shard = approvalRequest.getShard();
         byte [] response = success ? "COMMIT".getBytes() : "ABORT".getBytes();
+        logger.info("responding " + response.toString() + " to txn " + pathId);
         replicaManager.response2PC(pathId, shard, response, drives);
 
         responseObserver.onNext(Empty.newBuilder().build());

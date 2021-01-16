@@ -47,7 +47,7 @@ public class DriveReplicationService {
     }
 
     public void sendDrive(Drive newDrive, int dstServerId, boolean replication) {
-//        int port = 7070 + serverId;
+//        int port = 7070 + dstServerId;
 //        ManagedChannel channel = ManagedChannelBuilder.forAddress("localhost", port).usePlaintext().build();
         // local vs docker
         logger.info(String.format("server-%d is sending drive to server-%d", ConfigurationManager.SERVER_ID, dstServerId));

@@ -42,95 +42,111 @@ public class PathPlanningService {
     }
 
     public Path planPath(Path path){
-        // todo: repeat several times in case of a race on the drives
+        logger.info("plan path transaction: " + path.getId());
+        int attempt = 0;
+        while(attempt < ConfigurationManager.PLAN_PATH_RETRIES && !path.isSatisfied()) {
+            attempt = attempt + 1;
+            // wait a random time
+            if(attempt > 1){
+                try {
+                    double time = Math.random() * 100;
+                    logger.info("retry path planning " + attempt + ", waiting " + time + " ms");
+                    Thread.sleep((long) (time));
+                }catch (Exception e){
+                    e.printStackTrace();
+                }
+            }
+            // get path options from the other shards
+            Map<AbstractMap.SimpleEntry<City, City>, List<Drive>> drives = sendPlanRequest(path);
+            // add inner shard drives to path options
+            DriveRepository.getInstance().getPathOptions(path).forEach((src_dst, l) ->
+                    drives.get(src_dst).addAll(l));
 
-        Map<AbstractMap.SimpleEntry<City, City>, List<Drive>> drives = sendPlanRequest(path);
+            for (List<Drive> l : drives.values()) {
+                if (l.isEmpty()) {
+                    // the path cannot be satisfied, no retry
+                    return path;
+                }
+            }
 
-        // add inner shard drives to path options
-        DriveRepository.getInstance().getPathOptions(path).forEach((src_dst, l) ->
-                drives.get(src_dst).addAll(l));
+            // get a mapping of the drives in the path by shards
+            List<List<UUID>> drivesPerShard = new ArrayList<>();
+            IntStream.range(0, ConfigurationManager.NUM_OF_SHARDS).
+                    forEach(i -> drivesPerShard.add(new ArrayList<>()));
 
-        for(List<Drive> l : drives.values()){
-            if(l.isEmpty()){
-                // the path cannot be satisfied
-                return path;
+            // randomly assign drives to path
+            Random rand = new Random();
+            Path finalPath = path; // due to a weird error
+            path.getRides().forEach((src_dst, id) -> {
+                Drive drive = drives.get(src_dst).get(rand.nextInt(drives.get(src_dst).size()));
+                finalPath.getRides().put(src_dst, drive.getId());
+                drivesPerShard.get(getShardIdByCity(drive.getStartingPoint()) - 1).add(drive.getId());
+            });
+
+//            if (path.getRides().containsValue(null)) {
+//                logger.info("no drives to satisfy the path");
+//                continue;
+//            } // the path cannot be satisfied
+
+            // reserve the drives belonging to this shard
+            if (!DriveRepository.getInstance().reserveDrives(drivesPerShard.get(ConfigurationManager.SHARD_ID - 1))) {
+                logger.info("cannot reserve drives to satisfy the path");
+                return path; // the path cannot be satisfied
+            }
+
+            // all the drives in the path belongs to this shard, no need for 2pc
+            if (drivesPerShard.get(ConfigurationManager.SHARD_ID - 1).size() == path.getCities().size() - 1) {
+                logger.info("inner shard path planning");
+                path.setSatisfied(true);
+                // publish that the drives are taken to shard
+                path.getRides().values().forEach(driveId ->
+                        driveReplicationService.replicateToAllMembers(DriveRepository.getInstance().getDrive(driveId))
+                );
+            }
+            // initiate 2pc transaction
+            else {
+                try {
+                    path = TPCTxn(path, drivesPerShard);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
             }
         }
-
-        // randomly assign drives to path
-        // todo: don't pick the same drive twice
-        Random rand = new Random();
-        Set<UUID> taken = new HashSet<>();
-        Path finalPath = path; // due to a weird error
-
-        path.getRides().forEach((src_dst, id) -> {
-            if (id == null) { // is this needed?
-                finalPath.getRides().put(src_dst,
-                        drives.get(src_dst).get(rand.nextInt(drives.get(src_dst).size())).getId());
-            }
-        });
-
-        if (path.getRides().containsValue(null)) {
-            logger.info("no drives to satisfy the path");
-            return path;
-        } // the path cannot be satisfied
-
-        // get a mapping of the drives in the path by shards
-        // todo: the mapping is incorrect (if we ignore pd its fine)
-        List<List<UUID>> drivesPerShard = pathDrivesPerShard(path);
-
-        // reserve the drives belonging to this shard
-        if(!DriveRepository.getInstance().reserveDrives(drivesPerShard.get(ConfigurationManager.SHARD_ID - 1))){
-            logger.info("cannot reserve drives to satisfy the path");
-            return path; // the path cannot be satisfied
-        }
-
-        // all the drives in the path belongs to this shard, no need for 2pc
-        if (drivesPerShard.get(ConfigurationManager.SHARD_ID - 1).size() == path.getCities().size() - 1){
-            logger.info("inner shard path planning");
-            path.setSatisfied(true);
-            // publish that the drives are taken to shard
-            path.getRides().values().forEach(driveId ->
-                    driveReplicationService.replicateToAllMembers(DriveRepository.getInstance().getDrive(driveId))
-            );
-        }
-        // initiate 2pc transaction
-        else {
-            try {
-                path = TPCTxn(path, drivesPerShard);
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }
-        return path; // what to return?
+        return path;
     }
 
     @SneakyThrows
     public Path TPCTxn(Path path, List<List<UUID>> drivesPerShard){
-        final CountDownLatch connectedSignal = new CountDownLatch(1);
+        List<Integer> participatingShards = IntStream.range(1, ConfigurationManager.NUM_OF_SHARDS + 1).
+                filter(i -> !drivesPerShard.get(i - 1).isEmpty() && i !=ConfigurationManager.SHARD_ID)
+                .boxed().collect(Collectors.toList());
+
+        logger.info("participating shards: "+ participatingShards);
+
         // create the zNodes for the transaction
-        ReplicaManager.getInstance().initiate2PC(path.getId(), connectedSignal);
+        ReplicaManager.getInstance().initiate2PC(path.getId());
+        CountDownLatch finishSignal = new CountDownLatch(1);
 
-        if (!sendPathApprovalRequest(path, drivesPerShard)) {
+        if (!sendPathApprovalRequest(path, drivesPerShard, participatingShards)){
             // some leader didn't get the message
-            ReplicaManager.getInstance().abort2PC(path.getId());
-            return path;
-        }
-        // wait for all the processes to write their response
-        connectedSignal.await();
-
-        // read the transaction status from zookeeper
-        String decision = ReplicaManager.getInstance().get2PCStatus(path.getId());
-        if (decision.equals("COMMIT")) { // all the shards committed
-            path.setSatisfied(true);
-            // publish that the drives are taken to shard
-            drivesPerShard.get(ConfigurationManager.SHARD_ID - 1).forEach(driveId ->
-                    driveReplicationService.replicateToAllMembers(DriveRepository.getInstance().getDrive(driveId))
-            );
-        } else {
-            // release all the reserved drives
+            ReplicaManager.getInstance().write2PCResult(path.getId(), "ABORT".getBytes(), finishSignal);
             DriveRepository.getInstance().releaseDrives(drivesPerShard.get(ConfigurationManager.SHARD_ID - 1));
         }
+        else {
+            Map<Integer, String> responses = ReplicaManager.getInstance().get2PCResponses(path.getId(), participatingShards);
+            if (responses.containsValue(null) || responses.containsValue("ABORT")) {
+                ReplicaManager.getInstance().write2PCResult(path.getId(), "ABORT".getBytes(), finishSignal);
+                DriveRepository.getInstance().releaseDrives(drivesPerShard.get(ConfigurationManager.SHARD_ID - 1));
+            } else {
+                ReplicaManager.getInstance().write2PCResult(path.getId(), "COMMIT".getBytes(), finishSignal);
+                path.setSatisfied(true);
+                drivesPerShard.get(ConfigurationManager.SHARD_ID - 1).forEach(driveId ->
+                        driveReplicationService.replicateToAllMembers(DriveRepository.getInstance().getDrive(driveId))
+                );
+            }
+        }
+        logger.info("waiting for everyone to see the txn");
+        finishSignal.await();
         return path;
     }
 
@@ -157,7 +173,7 @@ public class PathPlanningService {
     }
 
     public Map<AbstractMap.SimpleEntry<City, City>, List<Drive>> getPathOptions(Path newPath, int dstServerId) {
-//        int port = 7070 + serverId;
+//        int port = 7070 + dstServerId;
 //        ManagedChannel channel = ManagedChannelBuilder.forAddress("localhost", port).usePlaintext().build();
         // local vs docker
         logger.info(String.format("server-%d is requesting path options from server-%d", ConfigurationManager.SERVER_ID, dstServerId));
@@ -189,27 +205,12 @@ public class PathPlanningService {
         }
     }
 
-    // todo: incorrect
-    public List<List<UUID>> pathDrivesPerShard(Path path){
-        List<List<UUID>> drivesPerShard = new ArrayList<>();
-        IntStream.range(0, ConfigurationManager.NUM_OF_SHARDS).
-                forEach(i -> drivesPerShard.add(new ArrayList<>()));
-        path.getRides().forEach((src_dst, id) -> {
-            List<UUID> l = drivesPerShard.get(getShardIdByCity(src_dst.getKey()) - 1);
-            l.add(id);
-        });
-        return drivesPerShard;
-    }
-
-    public boolean sendPathApprovalRequest(Path path, List<List<UUID>> drivesPerShard) {
+    public boolean sendPathApprovalRequest(Path path, List<List<UUID>> drivesPerShard, List<Integer> shards) {
         boolean success = true;
         try {
-            for (int shard = 1; shard <= ConfigurationManager.NUM_OF_SHARDS; shard++) {
-                if (shard == ConfigurationManager.SHARD_ID) {
-                    continue;
-                }
+            for (Integer shard : shards) {
                 int leader = ReplicaManager.getInstance().getLeader(shard);
-                if (!sendPathApproval(drivesPerShard.get(shard-1), path.getId(), leader)){
+                if (!sendPathApproval(drivesPerShard.get(shard - 1), path.getId(), leader)){
                     success = false;
                     break;
                 }
@@ -222,7 +223,7 @@ public class PathPlanningService {
     }
 
     public boolean sendPathApproval(List<UUID> drives, UUID pathID, int dstServerId) {
-//        int port = 7070 + serverId;
+//        int port = 7070 + dstServerId;
 //        ManagedChannel channel = ManagedChannelBuilder.forAddress("localhost", port).usePlaintext().build();
         // local vs docker
         logger.info(String.format("server-%d is sending path approval to server-%d", ConfigurationManager.SERVER_ID, dstServerId));
@@ -245,4 +246,3 @@ public class PathPlanningService {
         }
     }
 }
-

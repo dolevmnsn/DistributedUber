@@ -55,7 +55,7 @@ public class SnapshotAggregationService {
     }
 
     private SnapshotController.Snapshot getSnapshotFromServer(Integer dstServerId) {
-//        int port = 7070 + serverId;
+//        int port = 7070 + dstServerId;
 //        ManagedChannel channel = ManagedChannelBuilder.forAddress("localhost", port).usePlaintext().build();
         // local vs docker
         logger.info(String.format("server-%d is requesting snapshot from server-%d", ConfigurationManager.SERVER_ID, dstServerId));

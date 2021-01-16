@@ -60,10 +60,22 @@ public class DriveRepository {
         }
     }
 
-    public Map<AbstractMap.SimpleEntry<City, City>, List<Drive>> getPathOptions(Path path){
+    public Map<AbstractMap.SimpleEntry<City, City>, List<Drive>> getPathOptions(Path path) {
         Map<AbstractMap.SimpleEntry<City, City>, List<Drive>> pathOptions = new LinkedHashMap();
         path.getRides().keySet().forEach(src_dst ->
-                pathOptions.put(src_dst, findRidesForSegment(src_dst, path)));
+                pathOptions.put(src_dst, new ArrayList<>()));
+
+        // make sure we send each segment only once
+        List<AbstractMap.SimpleEntry<City, City>> segments = new ArrayList<>(path.getRides().keySet());
+        Collections.shuffle(segments);
+        for (Drive drive : drives.values()) {
+            for (AbstractMap.SimpleEntry<City, City> src_dst : segments) {
+                if (satisfiesSegment(drive, src_dst, path)) {
+                    pathOptions.get(src_dst).add(drive);
+                    break;
+                }
+            }
+        }
         return pathOptions;
     }
 
