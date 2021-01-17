@@ -79,6 +79,7 @@ public class DriveRepository {
         return pathOptions;
     }
 
+/*
     private List<Drive> findRidesForSegment(AbstractMap.SimpleEntry<City, City> src_dst, Path path) {
         List<Drive> matchingDrives = new ArrayList<>();
         for (Drive drive : drives.values()) {
@@ -88,16 +89,17 @@ public class DriveRepository {
         }
         return matchingDrives;
     }
+*/
 
     private boolean satisfiesSegment(Drive drive, AbstractMap.SimpleEntry<City, City> src_dst, Path path) {
         boolean isNotSameUser = !drive.getDriver().equals(path.getPassenger());
         boolean sameDate = drive.getDepartureDate().equals(path.getDepartureDate());
         boolean vacant = drive.getTaken() < drive.getVacancies();
         // TODO: calculate right condition. now only from sec to dst.
-//        boolean isNotPassDeviation = maxDeviation(drive, src_dst) <= drive.getPermittedDeviation();
-//        return isNotSameUser && isNotPassDeviation;
-        return isNotSameUser && sameDate && vacant &&
-                drive.getStartingPoint().equals(src_dst.getKey()) && drive.getEndingPoint().equals(src_dst.getValue());
+        boolean isNotPassDeviation = maxDeviation(drive, src_dst) <= drive.getPermittedDeviation();
+        return isNotSameUser && sameDate && vacant && isNotPassDeviation;
+//        return isNotSameUser && sameDate && vacant &&
+//                drive.getStartingPoint().equals(src_dst.getKey()) && drive.getEndingPoint().equals(src_dst.getValue());
     }
 
     private double maxDeviation(Drive drive, AbstractMap.SimpleEntry<City, City> src_dst) {
@@ -123,12 +125,12 @@ public class DriveRepository {
         return (numerator / denominator);
     }
 
-    public void updateFullDrive(UUID id){
-        Drive drive = drives.remove(id);
-        if (drive != null){
-            fullDrives.put(id, drive);
-        }
-    }
+//    public void updateFullDrive(UUID id){
+//        Drive drive = drives.remove(id);
+//        if (drive != null){
+//            fullDrives.put(id, drive);
+//        }
+//    }
 
     public List<Drive> getDrivesSinceRevision(long revision) {
         return drives.values().stream()

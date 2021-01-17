@@ -64,7 +64,6 @@ public class UpdatesService {
 
             logger.info(String.format("The most updated server is: %d with revision: %d", mostUpdated.getKey(), mostUpdated.getValue()));
 
-            logger.info("removing updated servers:");
             while (serverRevisions.values().remove(mostUpdated.getValue())); // remove updated servers
 
             if (serverRevisions.isEmpty()) {

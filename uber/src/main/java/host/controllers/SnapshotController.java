@@ -1,6 +1,7 @@
 package host.controllers;
 
 import Services.SnapshotAggregationService;
+import entities.City;
 import entities.Drive;
 import entities.Path;
 import host.RevisionManager;
@@ -12,8 +13,8 @@ import repositories.DriveRepository;
 import repositories.PathRepository;
 
 import javax.annotation.PostConstruct;
-import java.util.ArrayList;
-import java.util.Comparator;
+import java.awt.*;
+import java.util.*;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -66,5 +67,12 @@ public class SnapshotController {
     @GetMapping("/localMemory")
     Snapshot getLocalMemory() {
         return new Snapshot(DriveRepository.getInstance().getAll(), PathRepository.getInstance().getAll());
+    }
+
+    @GetMapping("/cities")
+    Map<String, Point> getCities() {
+        Map<String, Point> cityPointMap = new LinkedHashMap<>();
+        Arrays.stream(City.values()).forEach(city -> cityPointMap.put(city.getName(), city.getLocation()));
+        return cityPointMap;
     }
 }
