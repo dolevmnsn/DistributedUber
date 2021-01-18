@@ -15,7 +15,7 @@ public class PathRepository {
         paths = new ArrayList<>();
     }
 
-    public static PathRepository getInstance() {
+    public synchronized static PathRepository getInstance() {
         if(INSTANCE == null) {
             INSTANCE = new PathRepository();
         }
@@ -23,13 +23,13 @@ public class PathRepository {
         return INSTANCE;
     }
 
-    public void save(Path path) {
+    public synchronized void save(Path path) {
         paths.add(path);
     }
 
-    public List<Path> getAll() { return paths; }
+    public synchronized List<Path> getAll() { return paths; }
 
-    public List<Path> getPathsSinceRevision(long revision) {
+    public synchronized List<Path> getPathsSinceRevision(long revision) {
         return paths.stream()
                 .filter(path -> path.getRevision() > revision)
                 .collect(Collectors.toList());

@@ -30,17 +30,17 @@ public class DriveRepository {
         return INSTANCE;
     }
 
-    public void save(Drive newDrive) {
+    public synchronized void save(Drive newDrive) {
         drives.put(newDrive.getId(), newDrive);
     }
 
-    public List<Drive> getAll() { return new ArrayList<>(drives.values()); }
+    public synchronized List<Drive> getAll() { return new ArrayList<>(drives.values()); }
 
-    public Drive getDrive(UUID id){
+    public synchronized Drive getDrive(UUID id){
         return drives.get(id);
     }
 
-    public boolean reserveDrives(List<UUID> drives){
+    public synchronized boolean reserveDrives(List<UUID> drives){
         List<UUID> visited = new ArrayList<>();
         for (UUID id : drives){
             if(!getDrive(id).increaseTaken()){
@@ -54,13 +54,13 @@ public class DriveRepository {
         return true;
     }
 
-    public void releaseDrives(List<UUID> drives){
+    public synchronized void releaseDrives(List<UUID> drives){
         for (UUID id : drives){
             getDrive(id).decreaseTaken();
         }
     }
 
-    public Map<AbstractMap.SimpleEntry<City, City>, List<Drive>> getPathOptions(Path path) {
+    public synchronized Map<AbstractMap.SimpleEntry<City, City>, List<Drive>> getPathOptions(Path path) {
         Map<AbstractMap.SimpleEntry<City, City>, List<Drive>> pathOptions = new LinkedHashMap();
         path.getRides().keySet().forEach(src_dst ->
                 pathOptions.put(src_dst, new ArrayList<>()));
