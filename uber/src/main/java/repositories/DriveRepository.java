@@ -95,23 +95,21 @@ public class DriveRepository {
         boolean isNotSameUser = !drive.getDriver().equals(path.getPassenger());
         boolean sameDate = drive.getDepartureDate().equals(path.getDepartureDate());
         boolean vacant = drive.getTaken() < drive.getVacancies();
-        // TODO: calculate right condition. now only from sec to dst.
-        boolean isNotPassDeviation = maxDeviation(drive, src_dst) <= drive.getPermittedDeviation();
+        boolean isNotPassDeviation = doesNotPassDeviation(drive, src_dst);
         return isNotSameUser && sameDate && vacant && isNotPassDeviation;
-//        return isNotSameUser && sameDate && vacant &&
-//                drive.getStartingPoint().equals(src_dst.getKey()) && drive.getEndingPoint().equals(src_dst.getValue());
     }
 
-    private double maxDeviation(Drive drive, AbstractMap.SimpleEntry<City, City> src_dst) {
+    private boolean doesNotPassDeviation(Drive drive, AbstractMap.SimpleEntry<City, City> src_dst) {
         Point driveSrc = drive.getStartingPoint().getLocation();
         Point driveDst = drive.getEndingPoint().getLocation();
         Point segmentSrc = src_dst.getKey().getLocation();
         Point segmentDst = src_dst.getValue().getLocation();
+        double pd = drive.getPermittedDeviation();
 
-        double deviationToSegSrc = distance(driveSrc, driveDst, segmentSrc);
-        double deviationToSegDst = distance(driveSrc, driveDst, segmentDst);
+        boolean deviationToSegSrc = driveDst.equals(segmentDst) && distance(driveSrc, driveDst, segmentSrc) <= pd;
+        boolean deviationToSegDst = driveSrc.equals(segmentSrc) && distance(driveSrc, driveDst, segmentDst) <= pd;
 
-        return Math.max(deviationToSegSrc, deviationToSegDst);
+        return deviationToSegSrc || deviationToSegDst;
     }
 
     private double distance(Point point1, Point point2, Point point0) {
